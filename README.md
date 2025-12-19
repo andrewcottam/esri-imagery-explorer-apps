@@ -413,3 +413,22 @@ limitations under the License.
 
 A copy of the license is available in the repository's [LICENSE](./LICENSE) file.
 
+
+
+# Andrews Notes
+## Starting
+```
+npm run start:sentinel2
+```
+
+## Deploying 
+To build and deploy the app, you can run the commands below, this will place all files needed for deployment into the `/dist/sentinel2explorer` directory and publish to gh-pages.
+```sh
+npm run build:sentinel2
+npx gh-pages -d dist/sentinel2explorer
+```
+Then the app is available here:
+https://andrewcottam.github.io/esri-imagery-explorer-apps/
+
+## Text strings
+Are stored in locale files, e.g. public/locales/en/common.json - change and save and hot-reload will happen

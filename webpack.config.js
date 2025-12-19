@@ -13,7 +13,7 @@ const fs = require('fs');
 
 const config = require('./src/config.json');
 
-module.exports =  (env, options)=> {
+module.exports = (env, options) => {
 
     // check the mode of the build
     const mode = options.mode;
@@ -54,9 +54,9 @@ module.exports =  (env, options)=> {
     const app = env['app']
 
     // If the app is not specified, throw an error
-    if(!app){
+    if (!app) {
         throw new Error(
-            'A valid `app` name is not found in environment variables, '+
+            'A valid `app` name is not found in environment variables, ' +
             'try `npm run start-landsat`.\n'
         )
     }
@@ -73,9 +73,9 @@ module.exports =  (env, options)=> {
      */
     const appConfig = config.apps[app]
 
-    if(!appConfig){
+    if (!appConfig) {
         throw new Error(
-            `config data for "${app}" is not found, `+
+            `config data for "${app}" is not found, ` +
             'please update `./src/config.json` to make sure it includes config data for this app'
         )
     }
@@ -90,9 +90,9 @@ module.exports =  (env, options)=> {
     // Validate that the entrypoint is defined.
     // The entrypoint must be a relative path (e.g. `./src/landsat-explorer/index.tsx`)
     // and should be specified in the `config.json` file under the corresponding app key.
-    if(!entrypoint){
+    if (!entrypoint) {
         throw new Error(
-            `entrypoint for "${app}" is not found, `+
+            `entrypoint for "${app}" is not found, ` +
             'please update `./src/config.json` to make sure it includes entrypoint of the app to start'
         )
     }
@@ -115,7 +115,10 @@ module.exports =  (env, options)=> {
             filename: '[name].[contenthash].js',
             chunkFilename: '[name].[contenthash].js',
             clean: true,
-            assetModuleFilename: `[name][contenthash][ext][query]`
+            assetModuleFilename: `[name][contenthash][ext][query]`,
+            publicPath: process.env.NODE_ENV === 'production'
+                ? '/esri-imagery-explorer-apps/'
+                : '/'
         },
         devtool: devMode ? 'source-map' : false,
         resolve: {
@@ -141,11 +144,11 @@ module.exports =  (env, options)=> {
                     use: [
                         devMode ? 'style-loader' : MiniCssExtractPlugin.loader,
                         {
-                            loader: "css-loader", 
+                            loader: "css-loader",
                             options: {
                                 sourceMap: true
                             }
-                        }, 
+                        },
                         {
                             loader: 'postcss-loader'
                         }
@@ -256,7 +259,7 @@ module.exports =  (env, options)=> {
                         from: `public/thumbnails/${app}.jpg`,
                         to: `public/thumbnails/${app}.jpg`
                     },
-                    {   
+                    {
                         // copy locales files are used for i18n
                         // only need common.json and app specific json file
                         from: 'public/locales',
@@ -277,28 +280,28 @@ module.exports =  (env, options)=> {
                     title,
                     description,
                     author: package.author,
-                    keywords: Array.isArray(package.keywords) 
-                        ? package.keywords.join(',') 
+                    keywords: Array.isArray(package.keywords)
+                        ? package.keywords.join(',')
                         : undefined,
                     'og:title': title,
                     'og:description': description,
                     'og:url': `https://livingatlas.arcgis.com${pathname}/`,
                     'og:image': `https://livingatlas.arcgis.com${pathname}/public/thumbnails/${app}.jpg`,
-                    'last-modified':  new Date().getTime().toString()
+                    'last-modified': new Date().getTime().toString()
                 },
                 minify: {
-                    html5                          : true,
-                    collapseWhitespace             : true,
-                    minifyCSS                      : true,
-                    minifyJS                       : true,
-                    minifyURLs                     : false,
-                    removeComments                 : true,
-                    removeEmptyAttributes          : true,
-                    removeOptionalTags             : true,
-                    removeRedundantAttributes      : true,
-                    removeScriptTypeAttributes     : true,
-                    removeStyleLinkTypeAttributese : true,
-                    useShortDoctype                : true
+                    html5: true,
+                    collapseWhitespace: true,
+                    minifyCSS: true,
+                    minifyJS: true,
+                    minifyURLs: false,
+                    removeComments: true,
+                    removeEmptyAttributes: true,
+                    removeOptionalTags: true,
+                    removeRedundantAttributes: true,
+                    removeScriptTypeAttributes: true,
+                    removeStyleLinkTypeAttributese: true,
+                    useShortDoctype: true
                 }
             }),
         ].filter(Boolean),
@@ -311,7 +314,7 @@ module.exports =  (env, options)=> {
                             drop_console: true,
                         }
                     }
-                }), 
+                }),
                 new CssMinimizerPlugin()
             ],
             /**

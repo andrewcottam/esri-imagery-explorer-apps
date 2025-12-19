@@ -5,6 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --passWithNoTests",
+    "predeploy:sentinel2": "npm run build:sentinel2",
+    "deploy:sentinel2": "gh-pages -d dist/sentinel2explorer",
+    "predeploy:sentinel2:prod": "npm run build:sentinel2:prod",
+    "deploy:sentinel2:prod": "gh-pages -d dist/sentinel2explorer",
     "start:landsat": "webpack serve --mode development --open --env app=landsatexplorer --env envFileName=.env",
     "start:landsat:dev": "webpack serve --mode development --open --env app=landsatexplorer --env envFileName=.env.development",
     "start:landsat:prod": "webpack serve --mode development --open --env app=landsatexplorer --env envFileName=.env.production",
@@ -109,6 +113,7 @@
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-react": "^7.30.1",
     "fork-ts-checker-webpack-plugin": "^9.1.0",
+    "gh-pages": "^6.3.0",
     "html-loader": "^5.1.0",
     "html-webpack-plugin": "^5.6.3",
     "husky": "^8.0.1",

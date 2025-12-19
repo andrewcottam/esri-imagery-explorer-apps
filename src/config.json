@@ -15,7 +15,7 @@
             "supportedLocales": ["en"]
         },
         "sentinel1explorer": {
-            "title": "Esri | Sentinel-1 Explorer",
+            "title": "Restor | Sentinel-1 Explorer",
             "description": "Explore and begin to unlock the wealth of information provided by Sentinel-1 through an intuitive user experience leveraging a variety of ArcGIS capabilities.",
             "pathname": "/sentinel1explorer",
             "entrypoint": "/src/sentinel-1-explorer/index.tsx",
