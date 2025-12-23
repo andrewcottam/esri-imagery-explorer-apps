@@ -160,6 +160,7 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
                             centerChanged([center.longitude, center.latitude])
                         );
                         dispatch(zoomChanged(zoom));
+                        dispatch(extentUpdated(extent));
                         dispatch(resolutionUpdated(resolution));
                         dispatch(scaleUpdated(scale));
                     }}
