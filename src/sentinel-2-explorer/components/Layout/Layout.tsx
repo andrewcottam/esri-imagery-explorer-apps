@@ -156,7 +156,7 @@ const Layout = () => {
                         )}
                     </div>
 
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 mr-1">
                         <Sentinel2RasterFunctionSelector />
                     </div>
                 </div>
