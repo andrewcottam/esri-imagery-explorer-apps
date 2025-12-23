@@ -56,7 +56,7 @@ export const InterestingPlaces: FC<Props> = ({
         <div
             data-testid="interesting-places-container"
             className={classNames({
-                'h-full w-auto mx-4 pr-4 border-r border-custom-light-blue-25':
+                'h-full w-auto mx-4 pr-2 border-r border-custom-light-blue-25':
                     IS_MOBILE_DEVICE === false,
                 'h-auto w-auto my-4 mx-4': IS_MOBILE_DEVICE === true,
             })}

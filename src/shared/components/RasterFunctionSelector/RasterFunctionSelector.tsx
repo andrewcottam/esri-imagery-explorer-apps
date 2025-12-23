@@ -96,7 +96,7 @@ export const RasterFunctionSelector: FC<Props> = ({
             </div>
 
             <div
-                className="flex flex-wrap max-w-[280px] justify-center gap-[5px] max-h-[155px] pr-1 overflow-x-hidden overflow-y-auto fancy-scrollbar"
+                className="flex flex-wrap max-w-[270px] justify-center gap-[5px] max-h-[155px] pr-1 overflow-x-hidden overflow-y-auto fancy-scrollbar"
                 data-testid="renderer-selector-container"
             >
                 {rasterFunctionInfo.map((d) => {
