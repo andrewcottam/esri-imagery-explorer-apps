@@ -67,11 +67,23 @@ export type AnalysisTool =
 
 /**
  * Methods for compositing multiple scenes together
- * - `min` minimum pixel value across scenes
- * - `max` maximum pixel value across scenes
- * - `median` median pixel value across scenes
+ * Maps to ArcGIS Image Server mosaic operations
+ * - `first` first pixel value (MT_FIRST)
+ * - `last` last pixel value (MT_LAST)
+ * - `min` minimum pixel value (MT_MIN)
+ * - `max` maximum pixel value (MT_MAX)
+ * - `mean` mean/average pixel value (MT_MEAN)
+ * - `blend` blend pixel values (MT_BLEND)
+ * - `sum` sum pixel values (MT_SUM)
  */
-export type CompositeMethod = 'min' | 'max' | 'median';
+export type CompositeMethod =
+    | 'first'
+    | 'last'
+    | 'min'
+    | 'max'
+    | 'mean'
+    | 'blend'
+    | 'sum';
 
 /**
  * Query Params and Rendering Options for a Imagery Scene (e.g. Landsat or Sentinel-2)
@@ -205,7 +217,7 @@ export type ImageryScenesState = {
      */
     compositeSceneIds: number[];
     /**
-     * Method to use for compositing multiple scenes (min, max, median)
+     * Method to use for compositing multiple scenes (first, last, min, max, mean, blend, sum)
      */
     compositeMethod: CompositeMethod;
 };

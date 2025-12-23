@@ -28,13 +28,13 @@ export const CompositeModeSelector = () => {
     const compositeMethod = useAppSelector(selectCompositeMethod);
 
     const compositeMethods = [
+        { value: 'first', label: 'First', selected: compositeMethod === 'first' },
+        { value: 'last', label: 'Last', selected: compositeMethod === 'last' },
         { value: 'min', label: 'Min', selected: compositeMethod === 'min' },
         { value: 'max', label: 'Max', selected: compositeMethod === 'max' },
-        {
-            value: 'median',
-            label: 'Median',
-            selected: compositeMethod === 'median',
-        },
+        { value: 'mean', label: 'Mean', selected: compositeMethod === 'mean' },
+        { value: 'blend', label: 'Blend', selected: compositeMethod === 'blend' },
+        { value: 'sum', label: 'Sum', selected: compositeMethod === 'sum' },
     ];
 
     return (

@@ -61,20 +61,24 @@ export const getByAttributeMosaicRule = (
 /**
  * Get mosaic rule for compositing multiple scenes using the specified method
  * @param objectIds Array of object IDs to include in the composite
- * @param method Composite method: 'min', 'max', or 'median'
+ * @param method Composite method (maps to ArcGIS mosaic operations)
  * @returns Mosaic rule object
  *
  * @see https://developers.arcgis.com/rest/services-reference/enterprise/mosaic-rules/
  */
 export const getCompositeMosaicRule = (
     objectIds: number[],
-    method: 'min' | 'max' | 'median'
+    method: 'first' | 'last' | 'min' | 'max' | 'mean' | 'blend' | 'sum'
 ) => {
     // Map composite methods to ArcGIS mosaic operations
     const mosaicOperationMap = {
+        first: 'MT_FIRST',
+        last: 'MT_LAST',
         min: 'MT_MIN',
         max: 'MT_MAX',
-        median: 'MT_FIRST', // Median not directly supported, will need custom implementation
+        mean: 'MT_MEAN',
+        blend: 'MT_BLEND',
+        sum: 'MT_SUM',
     };
 
     return {

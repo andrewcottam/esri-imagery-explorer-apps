@@ -101,9 +101,9 @@ type ExportCompositeImageParams = {
      */
     objectIds: number[];
     /**
-     * Composite method: min, max, or median
+     * Composite method (maps to ArcGIS mosaic operations)
      */
-    method: 'min' | 'max' | 'median';
+    method: 'first' | 'last' | 'min' | 'max' | 'mean' | 'blend' | 'sum';
     abortController: AbortController;
 };
 
