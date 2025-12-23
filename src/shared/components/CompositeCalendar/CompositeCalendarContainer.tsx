@@ -124,8 +124,10 @@ const CompositeCalendarContainer: FC<Props> = ({ children }: Props) => {
                     const startIndex = Math.min(lastIndex, currentIndex);
                     const endIndex = Math.max(lastIndex, currentIndex);
 
+                    // Only include scenes that pass the cloud threshold filter
                     const rangeSceneIds = formattedScenes
                         .slice(startIndex, endIndex + 1)
+                        .filter((scene) => !scene.doesNotMeetCriteria)
                         .map((scene) => scene.objectId);
 
                     // Merge with existing selection
