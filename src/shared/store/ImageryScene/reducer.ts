@@ -29,6 +29,7 @@ import { DateRange } from '@typing/shared';
 /**
  * modes that the user can use to explore the imagery layer/scene
  * - `dynamic` mode to view the mosaicked scenes
+ * - `bookmarks` mode to view saved spatial bookmarks
  * - `find a scene` mode to find and explorer a single scene
  * - `swipe` mode to compare two scenes side by side using Swipe widget
  * - `animate` mode to animate a list of scenes
@@ -37,6 +38,7 @@ import { DateRange } from '@typing/shared';
  */
 export type AppMode =
     | 'dynamic' // view the mosaicked scenes
+    | 'bookmarks' // view saved spatial bookmarks
     | 'find a scene' // find and explorer a single scene
     | 'swipe' // compare two scenes side by side using Swipe widget
     | 'animate' // animate a list of scenes

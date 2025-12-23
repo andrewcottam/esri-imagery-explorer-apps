@@ -54,6 +54,8 @@ import { Sentinel2TemporalProfileTool } from '../Sentinel2TemporalProfileTool/Se
 import { Sentinel2SavePanel } from '../Sentinel2SavePanel';
 import { Sentinel2InterestingPlaces } from '../Sentinel2InterestingPlaces';
 import { useTranslation } from 'react-i18next';
+import { ProjectsList } from '@shared/components/ProjectsList/ProjectsList';
+import { BookmarksList } from '../BookmarksList/BookmarksList';
 
 const Layout = () => {
     const { t } = useTranslation();
@@ -62,7 +64,7 @@ const Layout = () => {
 
     const analysisTool = useAppSelector(selectActiveAnalysisTool);
 
-    const dynamicModeOn = mode === 'dynamic';
+    const bookmarksModeOn = mode === 'bookmarks';
 
     const shouldShowSecondaryControls = useShouldShowSecondaryControls();
 
@@ -113,14 +115,17 @@ const Layout = () => {
                             <ChangeCompareLayerSelector />
                         </ContainerOfSecondaryControls>
                     )}
+
+                    {bookmarksModeOn && (
+                        <ContainerOfSecondaryControls>
+                            <ProjectsList />
+                        </ContainerOfSecondaryControls>
+                    )}
                 </div>
 
                 <div className="flex flex-grow justify-center shrink-0">
-                    {dynamicModeOn ? (
-                        <>
-                            <Sentinel2DynamicModeInfo />
-                            <Sentinel2InterestingPlaces />
-                        </>
+                    {bookmarksModeOn ? (
+                        <BookmarksList />
                     ) : (
                         <>
                             <div className="ml-2 3xl:ml-0">

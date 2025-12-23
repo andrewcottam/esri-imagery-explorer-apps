@@ -13,7 +13,16 @@
  * limitations under the License.
  */
 
-import { getFirestore, collection, doc, setDoc, addDoc } from 'firebase/firestore';
+import {
+    getFirestore,
+    collection,
+    doc,
+    setDoc,
+    addDoc,
+    getDocs,
+    query,
+    where,
+} from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 
 /**
@@ -97,6 +106,102 @@ export const saveSpatialBookmark = async (
         });
     } catch (error) {
         console.error('Error saving spatial bookmark:', error);
+        throw error;
+    }
+};
+
+/**
+ * Project data returned from Firestore
+ */
+export type ProjectData = {
+    id: string;
+    name: string;
+    createdAt: number;
+    userId: string;
+};
+
+/**
+ * Bookmark data returned from Firestore with ID
+ */
+export type BookmarkData = SpatialBookmark & {
+    id: string;
+};
+
+/**
+ * Fetch all projects for a specific user
+ *
+ * @param userId - The user ID from Firebase Auth
+ * @returns Promise<ProjectData[]>
+ */
+export const fetchUserProjects = async (
+    userId: string
+): Promise<ProjectData[]> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Query projects collection for user's projects
+        const projectsRef = collection(db, 'sentinel2-explorer');
+        const q = query(projectsRef, where('userId', '==', userId));
+        const querySnapshot = await getDocs(q);
+
+        const projects: ProjectData[] = [];
+        querySnapshot.forEach((doc) => {
+            projects.push({
+                id: doc.id,
+                ...doc.data(),
+            } as ProjectData);
+        });
+
+        console.log(`Fetched ${projects.length} projects for user ${userId}`);
+        return projects;
+    } catch (error) {
+        console.error('Error fetching user projects:', error);
+        throw error;
+    }
+};
+
+/**
+ * Fetch all bookmarks for a specific project and user
+ *
+ * @param projectId - The project document ID
+ * @param userId - The user ID from Firebase Auth
+ * @returns Promise<BookmarkData[]>
+ */
+export const fetchProjectBookmarks = async (
+    projectId: string,
+    userId: string
+): Promise<BookmarkData[]> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Reference to the bookmarks subcollection
+        const bookmarksRef = collection(
+            db,
+            'sentinel2-explorer',
+            projectId,
+            'bookmarks'
+        );
+
+        // Query bookmarks for this user
+        const q = query(bookmarksRef, where('userId', '==', userId));
+        const querySnapshot = await getDocs(q);
+
+        const bookmarks: BookmarkData[] = [];
+        querySnapshot.forEach((doc) => {
+            bookmarks.push({
+                id: doc.id,
+                ...doc.data(),
+            } as BookmarkData);
+        });
+
+        console.log(
+            `Fetched ${bookmarks.length} bookmarks for project ${projectId}`
+        );
+        return bookmarks;
+    } catch (error) {
+        console.error('Error fetching project bookmarks:', error);
         throw error;
     }
 };

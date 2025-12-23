@@ -30,6 +30,7 @@ import Sentinel1 from './Sentinel1/reducer';
 import PublishAndDownloadJobs from './PublishAndDownloadJobs/reducer';
 import ImageryService from './ImageryService/reducer';
 import Firebase from './Firebase/reducer';
+import Bookmarks from './Bookmarks/reducer';
 
 const reducers = combineReducers({
     Map,
@@ -48,6 +49,7 @@ const reducers = combineReducers({
     TemporalCompositeTool,
     PublishAndDownloadJobs,
     Firebase,
+    Bookmarks,
 });
 
 export default reducers;
