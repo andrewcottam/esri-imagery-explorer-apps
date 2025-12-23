@@ -13,44 +13,74 @@
  * limitations under the License.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppSelector } from '@shared/store/configureStore';
 import {
     selectCompositeSceneIds,
     selectCompositeMethod,
+    selectQueryParams4MainScene,
 } from '@shared/store/ImageryScene/selectors';
+import { selectMapExtent } from '@shared/store/Map/selectors';
 import { Button } from '@shared/components/Button';
 import { useTranslation } from 'react-i18next';
+import { exportCompositeImage } from '@shared/services/helpers/exportImage';
+import { SENTINEL_2_SERVICE_URL } from '@shared/services/sentinel-2/config';
 
 export const GenerateCompositeButton = () => {
     const { t } = useTranslation();
 
+    const [isLoading, setIsLoading] = useState(false);
+
     const compositeSceneIds = useAppSelector(selectCompositeSceneIds);
     const compositeMethod = useAppSelector(selectCompositeMethod);
+    const mapExtent = useAppSelector(selectMapExtent);
+    const queryParams = useAppSelector(selectQueryParams4MainScene);
 
     const isDisabled = !compositeSceneIds || compositeSceneIds.length < 2;
 
-    const handleGenerateComposite = () => {
-        if (isDisabled) {
+    const handleGenerateComposite = async () => {
+        if (isDisabled || !mapExtent || !queryParams) {
             return;
         }
 
-        // TODO: Implement composite generation
-        // This will call the ArcGIS Image Server exportImage API with:
-        // - Multiple object IDs (compositeSceneIds)
-        // - Composite method (compositeMethod)
-        // - Current extent
-        // - Selected raster function
-        console.log('Generating composite with:', {
-            sceneIds: compositeSceneIds,
-            method: compositeMethod,
-        });
+        setIsLoading(true);
 
-        // The implementation will:
-        // 1. Get current map extent
-        // 2. Get selected raster function
-        // 3. Call exportImage with getCompositeMosaicRule
-        // 4. Display result on map or download
+        try {
+            const abortController = new AbortController();
+
+            // Use a standard map size for the exported image
+            // This could be made configurable or dynamic based on the actual map view
+            const width = 1920;
+            const height = 1080;
+
+            const blob = await exportCompositeImage({
+                serviceUrl: SENTINEL_2_SERVICE_URL,
+                extent: mapExtent,
+                width,
+                height,
+                rasterFunctionName: queryParams.rasterFunctionName,
+                objectIds: compositeSceneIds,
+                method: compositeMethod,
+                abortController,
+            });
+
+            // Download the composite image
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `composite_${compositeMethod}_${compositeSceneIds.length}_scenes.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log('Composite image generated and downloaded successfully');
+        } catch (error) {
+            console.error('Error generating composite:', error);
+            // TODO: Show error message to user
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -58,9 +88,11 @@ export const GenerateCompositeButton = () => {
             appearance="solid"
             scale="s"
             onClickHandler={handleGenerateComposite}
-            disabled={isDisabled}
+            disabled={isDisabled || isLoading}
         >
-            <span className="uppercase">{t('generate')}</span>
+            <span className="uppercase">
+                {isLoading ? t('loading') : t('generate')}
+            </span>
         </Button>
     );
 };

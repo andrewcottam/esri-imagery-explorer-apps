@@ -14,7 +14,7 @@
  */
 
 import IExtent from '@arcgis/core/geometry/Extent';
-import { getLockRasterMosaicRule } from './getMosaicRules';
+import { getLockRasterMosaicRule, getCompositeMosaicRule } from './getMosaicRules';
 
 type ExportImageParams = {
     /**
@@ -67,6 +67,82 @@ export const exportImage = async ({
     });
 
     const requestURL = `${serviceUrl}/exportImage?${params.toString()}`;
+
+    const res = await fetch(requestURL, { signal: abortController.signal });
+
+    const blob = await res.blob();
+
+    return blob;
+};
+
+type ExportCompositeImageParams = {
+    /**
+     * imagery service URL
+     */
+    serviceUrl: string;
+    /**
+     * Map Extent
+     */
+    extent: Pick<IExtent, 'xmin' | 'ymin' | 'xmax' | 'ymax'>;
+    /**
+     * width of map container
+     */
+    width: number;
+    /**
+     * height of map container
+     */
+    height: number;
+    /**
+     * raster function name that will be used in the rendering rule
+     */
+    rasterFunctionName: string;
+    /**
+     * object IDs of the imagery scenes to composite
+     */
+    objectIds: number[];
+    /**
+     * Composite method: min, max, or median
+     */
+    method: 'min' | 'max' | 'median';
+    abortController: AbortController;
+};
+
+/**
+ * Export composite image from multiple scenes using the specified method
+ * @param params Export composite image parameters
+ * @returns Image blob
+ */
+export const exportCompositeImage = async ({
+    serviceUrl,
+    extent,
+    width,
+    height,
+    rasterFunctionName,
+    objectIds,
+    method,
+    abortController,
+}: ExportCompositeImageParams) => {
+    const { xmin, xmax, ymin, ymax } = extent;
+
+    const params = new URLSearchParams({
+        f: 'image',
+        bbox: `${xmin},${ymin},${xmax},${ymax}`,
+        bboxSR: '102100',
+        imageSR: '102100',
+        format: 'jpgpng',
+        size: `${width},${height}`,
+        mosaicRule: JSON.stringify(getCompositeMosaicRule(objectIds, method)),
+        renderingRule: JSON.stringify({ rasterFunction: rasterFunctionName }),
+    });
+
+    const requestURL = `${serviceUrl}/exportImage?${params.toString()}`;
+
+    console.log('Exporting composite image:', {
+        objectIds,
+        method,
+        mosaicRule: getCompositeMosaicRule(objectIds, method),
+        url: requestURL,
+    });
 
     const res = await fetch(requestURL, { signal: abortController.signal });
 
