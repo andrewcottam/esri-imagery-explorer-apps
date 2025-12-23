@@ -24,6 +24,7 @@ import { ZoomWidget } from '../MapView/ZoomWidget';
 import { Zoom2NativeScale } from '../Zoom2NativeScale/Zoom2NativeScale';
 import { SearchWidget } from '../SearchWidget';
 import { useTranslation } from 'react-i18next';
+import { AddBookmarkButton } from '../AddBookmarkButton/AddBookmarkButton';
 
 type Props = {
     mapView?: MapView;
@@ -67,6 +68,10 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
             <ScreenshotWidget mapView={mapView} />
             <CopyLinkWidget />
             <OpenSavePanelButton />
+
+            <div className="h-[1px] my-[5px] w-map-action-button-size bg-custom-background"></div>
+
+            <AddBookmarkButton mapView={mapView} />
         </MapActionButtonGroup>
     );
 };
