@@ -33,6 +33,7 @@ import {
 } from '@shared/utils/date-time/getTimeRange';
 import { useAcquisitionYear } from '../Calendar/useAcquisitionYear';
 import { useTranslation } from 'react-i18next';
+import { CalciteIcon } from '@esri/calcite-components-react';
 
 type Props = {
     children?: React.ReactNode;
@@ -174,19 +175,31 @@ const CompositeCalendarContainer: FC<Props> = ({ children }: Props) => {
                         />
                     </div>
 
-                    <div className="ml-2 text-sm">
-                        {compositeSceneIds.length > 0 ? (
-                            <span className="text-custom-light-blue">
-                                {t('scenes_selected', {
-                                    count: compositeSceneIds.length,
-                                })}
-                            </span>
-                        ) : (
+                    {compositeSceneIds.length > 0 ? (
+                        <div className="text-xs ml-2 flex items-center">
+                            <div className="mr-1">
+                                <span className="text-custom-light-blue">
+                                    {t('scenes_selected', {
+                                        count: compositeSceneIds.length,
+                                    })}
+                                </span>
+                            </div>
+                            <div
+                                className="cursor-pointer"
+                                onClick={() => {
+                                    dispatch(compositeSceneIdsChanged([]));
+                                }}
+                            >
+                                <CalciteIcon icon="x-circle" scale="s" />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="ml-2 text-sm">
                             <span className="text-custom-light-blue-50">
                                 {t('select_a_date')}
                             </span>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
 
                 {children}

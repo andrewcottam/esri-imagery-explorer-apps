@@ -54,15 +54,13 @@ export const GenerateCompositeButton = () => {
     };
 
     return (
-        <div className="mt-2">
-            <Button
-                appearance="solid"
-                scale="m"
-                onClickHandler={handleGenerateComposite}
-                disabled={isDisabled}
-            >
-                <span className="uppercase">{t('generate_composite')}</span>
-            </Button>
-        </div>
+        <Button
+            appearance="solid"
+            scale="s"
+            onClickHandler={handleGenerateComposite}
+            disabled={isDisabled}
+        >
+            <span className="uppercase">{t('generate')}</span>
+        </Button>
     );
 };

@@ -38,18 +38,11 @@ export const CompositeModeSelector = () => {
     ];
 
     return (
-        <div className="mb-2">
-            <div className="text-center mb-2">
-                <span className="uppercase text-sm">
-                    {t('composite_method')}
-                </span>
-            </div>
-            <Dropdown
-                data={compositeMethods}
-                onChange={(value) => {
-                    dispatch(compositeMethodChanged(value as CompositeMethod));
-                }}
-            />
-        </div>
+        <Dropdown
+            data={compositeMethods}
+            onChange={(value) => {
+                dispatch(compositeMethodChanged(value as CompositeMethod));
+            }}
+        />
     );
 };

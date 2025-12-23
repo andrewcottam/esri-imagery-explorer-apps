@@ -126,6 +126,7 @@
     "scenes_selection": "Scenes Selection",
     "composite_method": "Composite Method",
     "generate_composite": "Generate Composite",
+    "generate": "Generate",
     "min_date": "Min Date",
     "max_date": "Max Date",
     "method": "Method",
