@@ -39,7 +39,31 @@ export const GenerateCompositeButton = () => {
     const isDisabled = !compositeSceneIds || compositeSceneIds.length < 2;
 
     const handleGenerateComposite = async () => {
-        if (isDisabled || !mapExtent || !queryParams) {
+        console.log('Generate button clicked', {
+            isDisabled,
+            compositeSceneIds,
+            compositeMethod,
+            mapExtent,
+            queryParams,
+        });
+
+        if (isDisabled) {
+            console.warn('Button is disabled - need at least 2 scenes');
+            return;
+        }
+
+        if (!mapExtent) {
+            console.error('Map extent is not available');
+            return;
+        }
+
+        if (!queryParams) {
+            console.error('Query params are not available');
+            return;
+        }
+
+        if (!queryParams.rasterFunctionName) {
+            console.error('Raster function name is not available');
             return;
         }
 
@@ -53,6 +77,16 @@ export const GenerateCompositeButton = () => {
             const width = 1920;
             const height = 1080;
 
+            console.log('Calling exportCompositeImage with:', {
+                serviceUrl: SENTINEL_2_SERVICE_URL,
+                extent: mapExtent,
+                width,
+                height,
+                rasterFunctionName: queryParams.rasterFunctionName,
+                objectIds: compositeSceneIds,
+                method: compositeMethod,
+            });
+
             const blob = await exportCompositeImage({
                 serviceUrl: SENTINEL_2_SERVICE_URL,
                 extent: mapExtent,
@@ -63,6 +97,8 @@ export const GenerateCompositeButton = () => {
                 method: compositeMethod,
                 abortController,
             });
+
+            console.log('Received blob:', blob);
 
             // Download the composite image
             const url = URL.createObjectURL(blob);
@@ -77,7 +113,7 @@ export const GenerateCompositeButton = () => {
             console.log('Composite image generated and downloaded successfully');
         } catch (error) {
             console.error('Error generating composite:', error);
-            // TODO: Show error message to user
+            alert(`Error generating composite: ${error.message || error}`);
         } finally {
             setIsLoading(false);
         }
