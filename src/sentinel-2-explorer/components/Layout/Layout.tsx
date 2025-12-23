@@ -64,6 +64,8 @@ const Layout = () => {
 
     const analysisTool = useAppSelector(selectActiveAnalysisTool);
 
+    const dynamicModeOn = mode === 'dynamic';
+
     const bookmarksModeOn = mode === 'bookmarks';
 
     const shouldShowSecondaryControls = useShouldShowSecondaryControls();
@@ -124,7 +126,12 @@ const Layout = () => {
                 </div>
 
                 <div className="flex flex-grow justify-center shrink-0">
-                    {bookmarksModeOn ? (
+                    {dynamicModeOn ? (
+                        <>
+                            <Sentinel2DynamicModeInfo />
+                            <Sentinel2InterestingPlaces />
+                        </>
+                    ) : bookmarksModeOn ? (
                         <BookmarksList />
                     ) : (
                         <>
