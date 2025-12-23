@@ -31,6 +31,7 @@ import { DateRange } from '@typing/shared';
  * - `dynamic` mode to view the mosaicked scenes
  * - `bookmarks` mode to view saved spatial bookmarks
  * - `find a scene` mode to find and explorer a single scene
+ * - `composite` mode to create composite images from multiple scenes
  * - `swipe` mode to compare two scenes side by side using Swipe widget
  * - `animate` mode to animate a list of scenes
  * - `analysis` mode to analyze the selected scene
@@ -40,6 +41,7 @@ export type AppMode =
     | 'dynamic' // view the mosaicked scenes
     | 'bookmarks' // view saved spatial bookmarks
     | 'find a scene' // find and explorer a single scene
+    | 'composite' // create composite images from multiple scenes
     | 'swipe' // compare two scenes side by side using Swipe widget
     | 'animate' // animate a list of scenes
     | 'analysis' // analyze the selected scene
@@ -62,6 +64,14 @@ export type AnalysisTool =
     | 'change' // change detection tool to compare two scenes
     | 'temporal composite' // temporal composite tool to create a composite image from multiple scenes
     | 'urban heat island'; // urban heat island tool that runs Landsat Surface Intra-Urban Heat Island (SIUHI) workflow.
+
+/**
+ * Methods for compositing multiple scenes together
+ * - `min` minimum pixel value across scenes
+ * - `max` maximum pixel value across scenes
+ * - `median` median pixel value across scenes
+ */
+export type CompositeMethod = 'min' | 'max' | 'median';
 
 /**
  * Query Params and Rendering Options for a Imagery Scene (e.g. Landsat or Sentinel-2)
@@ -190,6 +200,14 @@ export type ImageryScenesState = {
      * will be overridden, and the scene will be reselected from the new list of scenes.
      */
     shouldForceSceneReselection: boolean;
+    /**
+     * Array of object IDs for scenes selected in Composite mode
+     */
+    compositeSceneIds: number[];
+    /**
+     * Method to use for compositing multiple scenes (min, max, median)
+     */
+    compositeMethod: CompositeMethod;
 };
 
 export const DefaultQueryParams4ImageryScene: QueryParams4ImageryScene = {
@@ -221,6 +239,8 @@ export const initialImagerySceneState: ImageryScenesState = {
     },
     cloudCover: 0.5,
     shouldForceSceneReselection: false,
+    compositeSceneIds: [],
+    compositeMethod: 'max',
 };
 
 const slice = createSlice({
@@ -332,6 +352,18 @@ const slice = createSlice({
         ) => {
             state.shouldForceSceneReselection = action.payload;
         },
+        compositeSceneIdsChanged: (
+            state,
+            action: PayloadAction<number[]>
+        ) => {
+            state.compositeSceneIds = action.payload;
+        },
+        compositeMethodChanged: (
+            state,
+            action: PayloadAction<CompositeMethod>
+        ) => {
+            state.compositeMethod = action.payload;
+        },
     },
 });
 
@@ -350,6 +382,8 @@ export const {
     activeAnalysisToolChanged,
     availableImageryScenesUpdated,
     shouldForceSceneReselectionUpdated,
+    compositeSceneIdsChanged,
+    compositeMethodChanged,
 } = slice.actions;
 
 export default reducer;

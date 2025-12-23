@@ -21,7 +21,7 @@ import { ContainerOfSecondaryControls } from './ContainerOfSecondaryControls';
 import { useTranslation } from 'react-i18next';
 
 const modes: AppMode[] = ['swipe', 'animate', 'analysis'];
-const exploreModes: AppMode[] = ['dynamic', 'bookmarks', 'find a scene'];
+const exploreModes: AppMode[] = ['dynamic', 'bookmarks', 'find a scene', 'composite'];
 
 type Props = {
     /**
@@ -64,7 +64,8 @@ export const ModeSelector: FC<Props> = ({
     const isExploreButtonSelected =
         selectedMode === 'find a scene' ||
         selectedMode === 'bookmarks' ||
-        selectedMode === 'dynamic';
+        selectedMode === 'dynamic' ||
+        selectedMode === 'composite';
 
     return (
         <>

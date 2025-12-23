@@ -56,6 +56,10 @@ import { Sentinel2InterestingPlaces } from '../Sentinel2InterestingPlaces';
 import { useTranslation } from 'react-i18next';
 import { ProjectsList } from '@shared/components/ProjectsList/ProjectsList';
 import { BookmarksList } from '../BookmarksList/BookmarksList';
+import CompositeCalendar from '@shared/components/CompositeCalendar/CompositeCalendarContainer';
+import { CompositeModeSelector } from '@shared/components/CompositeModeSelector/CompositeModeSelector';
+import { CompositeInfoContainer } from '../CompositeInfo/CompositeInfoContainer';
+import { GenerateCompositeButton } from '@shared/components/GenerateCompositeButton/GenerateCompositeButton';
 
 const Layout = () => {
     const { t } = useTranslation();
@@ -67,6 +71,8 @@ const Layout = () => {
     const dynamicModeOn = mode === 'dynamic';
 
     const bookmarksModeOn = mode === 'bookmarks';
+
+    const compositeModeOn = mode === 'composite';
 
     const shouldShowSecondaryControls = useShouldShowSecondaryControls();
 
@@ -134,6 +140,21 @@ const Layout = () => {
                             </>
                         ) : bookmarksModeOn ? (
                             <BookmarksList />
+                        ) : compositeModeOn ? (
+                            <>
+                                <div className="ml-2 3xl:ml-0">
+                                    <CompositeCalendar>
+                                        <CloudFilter />
+                                    </CompositeCalendar>
+                                    <GenerateCompositeButton />
+                                </div>
+
+                                <div className="ml-4">
+                                    <CompositeModeSelector />
+                                </div>
+
+                                <CompositeInfoContainer />
+                            </>
                         ) : (
                             <>
                                 <div className="ml-2 3xl:ml-0">

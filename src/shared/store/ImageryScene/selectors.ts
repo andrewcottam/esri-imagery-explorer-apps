@@ -33,7 +33,11 @@ export const selectQueryParams4SceneInSelectedMode = createSelector(
         selectedItemID,
         activeAnalysisTool
     ) => {
-        if (mode === 'find a scene' || mode === 'dynamic') {
+        if (
+            mode === 'find a scene' ||
+            mode === 'dynamic' ||
+            mode === 'composite'
+        ) {
             return queryParams4MainScene;
         }
 
@@ -126,3 +130,9 @@ export const selectActiveAnalysisTool = (state: RootState) =>
 
 export const selectShouldForceSceneReselection = (state: RootState) =>
     state.ImageryScenes.shouldForceSceneReselection;
+
+export const selectCompositeSceneIds = (state: RootState) =>
+    state.ImageryScenes.compositeSceneIds;
+
+export const selectCompositeMethod = (state: RootState) =>
+    state.ImageryScenes.compositeMethod;

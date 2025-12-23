@@ -45,6 +45,10 @@ export type SceneInfoTableData = {
 
 type Props = {
     data: SceneInfoTableData[];
+    /**
+     * Optional title for the table. Defaults to 'scene_information'
+     */
+    title?: string;
 };
 
 const SceneInfoRow: FC<SceneInfoTableData> = ({
@@ -134,7 +138,7 @@ const SceneInfoRow: FC<SceneInfoTableData> = ({
     );
 };
 
-export const SceneInfoTable: FC<Props> = ({ data }: Props) => {
+export const SceneInfoTable: FC<Props> = ({ data, title }: Props) => {
     const { t } = useTranslation();
 
     const getContent = () => {
@@ -166,7 +170,9 @@ export const SceneInfoTable: FC<Props> = ({ data }: Props) => {
             })}
         >
             <div className="text-center mb-3 mt-1">
-                <h4 className="uppercase text-sm">{t('scene_information')}</h4>
+                <h4 className="uppercase text-sm">
+                    {title || t('scene_information')}
+                </h4>
             </div>
             {getContent()}
         </div>
