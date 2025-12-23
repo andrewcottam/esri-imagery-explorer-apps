@@ -125,36 +125,40 @@ const Layout = () => {
                     )}
                 </div>
 
-                <div className="flex flex-grow justify-center shrink-0">
-                    {dynamicModeOn ? (
-                        <>
-                            <Sentinel2DynamicModeInfo />
-                            <Sentinel2InterestingPlaces />
-                        </>
-                    ) : bookmarksModeOn ? (
-                        <BookmarksList />
-                    ) : (
-                        <>
-                            <div className="ml-2 3xl:ml-0">
-                                <Calendar>
-                                    <CloudFilter />
-                                </Calendar>
-                            </div>
-
-                            {mode === 'analysis' && (
-                                <div className="analyze-tool-and-scene-info-container">
-                                    <Sentinel2MaskTool />
-                                    <Sentinel2TemporalProfileTool />
-                                    <Sentinel2SpectralProfileTool />
-                                    <Sentinel2ChangeCompareTool />
+                <div className="flex flex-grow shrink-0">
+                    <div className="flex flex-grow justify-center">
+                        {dynamicModeOn ? (
+                            <>
+                                <Sentinel2DynamicModeInfo />
+                                <Sentinel2InterestingPlaces />
+                            </>
+                        ) : bookmarksModeOn ? (
+                            <BookmarksList />
+                        ) : (
+                            <>
+                                <div className="ml-2 3xl:ml-0">
+                                    <Calendar>
+                                        <CloudFilter />
+                                    </Calendar>
                                 </div>
-                            )}
 
-                            <SceneInfo />
-                        </>
-                    )}
+                                {mode === 'analysis' && (
+                                    <div className="analyze-tool-and-scene-info-container">
+                                        <Sentinel2MaskTool />
+                                        <Sentinel2TemporalProfileTool />
+                                        <Sentinel2SpectralProfileTool />
+                                        <Sentinel2ChangeCompareTool />
+                                    </div>
+                                )}
 
-                    <Sentinel2RasterFunctionSelector />
+                                <SceneInfo />
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex-shrink-0">
+                        <Sentinel2RasterFunctionSelector />
+                    </div>
                 </div>
             </BottomPanel>
             <Sentinel2SavePanel />
