@@ -146,10 +146,8 @@ const Layout = () => {
                                     <CompositeCalendar>
                                         <CloudFilter />
                                     </CompositeCalendar>
-                                    <div className="mt-2">
+                                    <div className="mt-2 flex gap-2">
                                         <GenerateCompositeButton />
-                                    </div>
-                                    <div className="mt-2">
                                         <CompositeModeSelector />
                                     </div>
                                 </div>
