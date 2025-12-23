@@ -29,6 +29,7 @@ import React, { FC } from 'react';
 import { useAppDispatch } from '@shared/store/configureStore';
 import { useAppSelector } from '@shared/store/configureStore';
 import { useTranslation } from 'react-i18next';
+import { FirebaseAuthButton } from '@shared/components/FirebaseAuthButton/FirebaseAuthButton';
 
 type ToggleButtonProps = {
     label: string;
@@ -136,6 +137,8 @@ export const ReferenceLayersToggleControl: FC = () => {
                     dispatch(showBasemapToggled());
                 }}
             />
+
+            <FirebaseAuthButton />
         </div>
     );
 };

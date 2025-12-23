@@ -28,6 +28,7 @@ import { AGOL_PORTAL_ROOT, SENTINEL2_EXPLORER_APP_ID } from '@shared/config';
 import { AboutSentinel2Explorer } from './components/About';
 import '@shared/components/calcite-components';
 import { initializeApp } from '@shared/utils/initialize-app/initializeApp';
+import { initializeFirebase } from '@shared/services/firebase/auth';
 
 (async () => {
     const root = createRoot(document.getElementById('root'));
@@ -38,6 +39,9 @@ import { initializeApp } from '@shared/utils/initialize-app/initializeApp';
         });
 
         const store = await getSentinel2ExplorerStore();
+
+        // Initialize Firebase with the store dispatch
+        initializeFirebase(store.dispatch);
 
         root.render(
             <ReduxProvider store={store}>

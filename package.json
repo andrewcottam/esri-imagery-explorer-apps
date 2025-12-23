@@ -146,6 +146,7 @@
     "classnames": "^2.2.6",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^2.0.0",
+    "firebase": "^12.7.0",
     "helper-toolkit-ts": "^1.2.1",
     "i18next": "^24.2.3",
     "i18next-http-backend": "^3.0.2",
