@@ -28,6 +28,9 @@ import { updateTooltipData } from '@shared/store/UI/thunks';
 import { RasterFunctionInfo } from '@typing/imagery-service';
 import { selectChangeCompareLayerIsOn } from '@shared/store/ChangeCompareTool/selectors';
 import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalCompositeTool/selectors';
+import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
+import { AddRendererDialog } from '../AddRendererDialog/AddRendererDialog';
+import { saveRenderer } from '@shared/services/firebase/firestore';
 
 type Props = {
     /**
@@ -64,6 +67,11 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
     const { rasterFunctionName, objectIdOfSelectedScene } =
         useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
 
+    const firebaseUser = useAppSelector(selectFirebaseUser);
+
+    const [showAddRendererDialog, setShowAddRendererDialog] = useState(false);
+    const [isSavingRenderer, setIsSavingRenderer] = useState(false);
+
     const shouldHide = useMemo(() => {
         if (mode === 'analysis' && analysisTool === 'temporal composite') {
             return true;
@@ -96,6 +104,26 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
         return false;
     };
 
+    const handleSaveRenderer = async (name: string, rendererJson: string) => {
+        if (!firebaseUser || isSavingRenderer) {
+            return;
+        }
+
+        setIsSavingRenderer(true);
+
+        try {
+            const renderer = JSON.parse(rendererJson);
+            await saveRenderer(name, renderer, firebaseUser.uid);
+            console.log('Renderer saved successfully');
+            setShowAddRendererDialog(false);
+        } catch (error) {
+            console.error('Error saving renderer:', error);
+            alert(`Error saving renderer: ${error.message || error}`);
+        } finally {
+            setIsSavingRenderer(false);
+        }
+    };
+
     if (!data || !data.length || shouldHide) {
         return null;
     }
@@ -105,28 +133,40 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
     // }
 
     return (
-        <RasterFunctionSelector
-            headerTooltip={headerTooltip}
-            rasterFunctionInfo={data}
-            nameOfSelectedRasterFunction={rasterFunctionName}
-            disabled={shouldDisable()}
-            widthOfTooltipContainer={widthOfTooltipContainer}
-            onChange={(rasterFunctionName) => {
-                dispatch(updateRasterFunctionName(rasterFunctionName));
-            }}
-            itemOnHover={(rasterFunctionData) => {
-                const { label, description, legend } = rasterFunctionData || {};
+        <>
+            <RasterFunctionSelector
+                headerTooltip={headerTooltip}
+                rasterFunctionInfo={data}
+                nameOfSelectedRasterFunction={rasterFunctionName}
+                disabled={shouldDisable()}
+                widthOfTooltipContainer={widthOfTooltipContainer}
+                showAddIcon={!!firebaseUser}
+                onAddClick={() => setShowAddRendererDialog(true)}
+                onChange={(rasterFunctionName) => {
+                    dispatch(updateRasterFunctionName(rasterFunctionName));
+                }}
+                itemOnHover={(rasterFunctionData) => {
+                    const { label, description, legend } =
+                        rasterFunctionData || {};
 
-                const data = rasterFunctionData
-                    ? {
-                          title: label,
-                          content: description,
-                          legendImage: legend,
-                      }
-                    : null;
+                    const data = rasterFunctionData
+                        ? {
+                              title: label,
+                              content: description,
+                              legendImage: legend,
+                          }
+                        : null;
 
-                dispatch(updateTooltipData(data));
-            }}
-        />
+                    dispatch(updateTooltipData(data));
+                }}
+            />
+
+            {showAddRendererDialog && (
+                <AddRendererDialog
+                    onClose={() => setShowAddRendererDialog(false)}
+                    onSave={handleSaveRenderer}
+                />
+            )}
+        </>
     );
 };

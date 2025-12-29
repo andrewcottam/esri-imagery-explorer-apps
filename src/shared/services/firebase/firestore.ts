@@ -43,9 +43,27 @@ export type SpatialBookmark = {
 };
 
 /**
+ * Represents a custom renderer configuration
+ */
+export type RendererConfig = {
+    name: string;
+    renderer: object; // The JSON renderer configuration
+    createdAt: number;
+    userId: string;
+};
+
+/**
+ * Renderer data returned from Firestore with ID
+ */
+export type RendererData = RendererConfig & {
+    id: string;
+};
+
+/**
  * Save a spatial bookmark to Firestore
+ * Path: sentinel2-explorer/<userid>/bookmarks/<project>/<bookmark_item>
  *
- * @param projectName - The project name (document ID in sentinel2-explorer collection)
+ * @param projectName - The project name (document ID in bookmarks collection)
  * @param bookmarkName - The name of the bookmark
  * @param mapViewData - The current map view data (center, zoom, extent)
  * @param userId - The user ID from Firebase Auth
@@ -70,8 +88,10 @@ export const saveSpatialBookmark = async (
         const app = getApp();
         const db = getFirestore(app);
 
-        // Reference to the project document
-        const projectDocRef = doc(db, 'sentinel2-explorer', projectName);
+        // Path: sentinel2-explorer/<userid>/bookmarks/<project>
+        const userDocRef = doc(db, 'sentinel2-explorer', userId);
+        const bookmarksCollectionRef = collection(userDocRef, 'bookmarks');
+        const projectDocRef = doc(bookmarksCollectionRef, projectName);
 
         // Ensure the project document exists (create it if it doesn't)
         await setDoc(
@@ -84,8 +104,8 @@ export const saveSpatialBookmark = async (
             { merge: true }
         );
 
-        // Reference to the bookmarks subcollection
-        const bookmarksCollectionRef = collection(projectDocRef, 'bookmarks');
+        // Reference to the bookmark items subcollection
+        const bookmarkItemsCollectionRef = collection(projectDocRef, 'items');
 
         // Create the bookmark data
         const bookmarkData: SpatialBookmark = {
@@ -98,7 +118,7 @@ export const saveSpatialBookmark = async (
         };
 
         // Add the bookmark to the subcollection
-        await addDoc(bookmarksCollectionRef, bookmarkData);
+        await addDoc(bookmarkItemsCollectionRef, bookmarkData);
 
         console.log('Spatial bookmark saved successfully:', {
             project: projectName,
@@ -129,6 +149,7 @@ export type BookmarkData = SpatialBookmark & {
 
 /**
  * Fetch all projects for a specific user
+ * Path: sentinel2-explorer/<userid>/bookmarks
  *
  * @param userId - The user ID from Firebase Auth
  * @returns Promise<ProjectData[]>
@@ -140,10 +161,10 @@ export const fetchUserProjects = async (
         const app = getApp();
         const db = getFirestore(app);
 
-        // Query projects collection for user's projects
-        const projectsRef = collection(db, 'sentinel2-explorer');
-        const q = query(projectsRef, where('userId', '==', userId));
-        const querySnapshot = await getDocs(q);
+        // Path: sentinel2-explorer/<userid>/bookmarks
+        const userDocRef = doc(db, 'sentinel2-explorer', userId);
+        const bookmarksCollectionRef = collection(userDocRef, 'bookmarks');
+        const querySnapshot = await getDocs(bookmarksCollectionRef);
 
         const projects: ProjectData[] = [];
         querySnapshot.forEach((doc) => {
@@ -163,6 +184,7 @@ export const fetchUserProjects = async (
 
 /**
  * Fetch all bookmarks for a specific project and user
+ * Path: sentinel2-explorer/<userid>/bookmarks/<project>/items
  *
  * @param projectId - The project document ID
  * @param userId - The user ID from Firebase Auth
@@ -176,17 +198,17 @@ export const fetchProjectBookmarks = async (
         const app = getApp();
         const db = getFirestore(app);
 
-        // Reference to the bookmarks subcollection
-        const bookmarksRef = collection(
+        // Path: sentinel2-explorer/<userid>/bookmarks/<project>/items
+        const bookmarkItemsRef = collection(
             db,
             'sentinel2-explorer',
+            userId,
+            'bookmarks',
             projectId,
-            'bookmarks'
+            'items'
         );
 
-        // Query bookmarks for this user
-        const q = query(bookmarksRef, where('userId', '==', userId));
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await getDocs(bookmarkItemsRef);
 
         const bookmarks: BookmarkData[] = [];
         querySnapshot.forEach((doc) => {
@@ -202,6 +224,81 @@ export const fetchProjectBookmarks = async (
         return bookmarks;
     } catch (error) {
         console.error('Error fetching project bookmarks:', error);
+        throw error;
+    }
+};
+
+/**
+ * Save a custom renderer to Firestore
+ * Path: sentinel2-explorer/<userid>/renderers/<renderer_item>
+ *
+ * @param name - The name of the renderer
+ * @param renderer - The renderer JSON configuration
+ * @param userId - The user ID from Firebase Auth
+ * @returns Promise<void>
+ */
+export const saveRenderer = async (
+    name: string,
+    renderer: object,
+    userId: string
+): Promise<void> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Path: sentinel2-explorer/<userid>/renderers
+        const userDocRef = doc(db, 'sentinel2-explorer', userId);
+        const renderersCollectionRef = collection(userDocRef, 'renderers');
+
+        // Create the renderer data
+        const rendererData: RendererConfig = {
+            name,
+            renderer,
+            createdAt: Date.now(),
+            userId,
+        };
+
+        // Add the renderer to the collection
+        await addDoc(renderersCollectionRef, rendererData);
+
+        console.log('Renderer saved successfully:', { name });
+    } catch (error) {
+        console.error('Error saving renderer:', error);
+        throw error;
+    }
+};
+
+/**
+ * Fetch all renderers for a specific user
+ * Path: sentinel2-explorer/<userid>/renderers
+ *
+ * @param userId - The user ID from Firebase Auth
+ * @returns Promise<RendererData[]>
+ */
+export const fetchUserRenderers = async (
+    userId: string
+): Promise<RendererData[]> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Path: sentinel2-explorer/<userid>/renderers
+        const userDocRef = doc(db, 'sentinel2-explorer', userId);
+        const renderersCollectionRef = collection(userDocRef, 'renderers');
+        const querySnapshot = await getDocs(renderersCollectionRef);
+
+        const renderers: RendererData[] = [];
+        querySnapshot.forEach((doc) => {
+            renderers.push({
+                id: doc.id,
+                ...doc.data(),
+            } as RendererData);
+        });
+
+        console.log(`Fetched ${renderers.length} renderers for user ${userId}`);
+        return renderers;
+    } catch (error) {
+        console.error('Error fetching user renderers:', error);
         throw error;
     }
 };

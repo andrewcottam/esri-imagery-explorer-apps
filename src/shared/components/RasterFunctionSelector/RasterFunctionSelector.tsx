@@ -54,6 +54,14 @@ type Props = {
      * Emits when users hovers a grid item in th list
      */
     itemOnHover: (data?: RasterFunctionInfo) => void;
+    /**
+     * Fires when user clicks the Add icon to add a custom renderer
+     */
+    onAddClick?: () => void;
+    /**
+     * if true, show the Add icon in the header (only when user is logged in)
+     */
+    showAddIcon?: boolean;
 };
 
 export const RasterFunctionSelector: FC<Props> = ({
@@ -64,6 +72,8 @@ export const RasterFunctionSelector: FC<Props> = ({
     widthOfTooltipContainer,
     onChange,
     itemOnHover,
+    onAddClick,
+    showAddIcon = false,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     useGetTooltipPositionOnHover(containerRef);
@@ -93,6 +103,16 @@ export const RasterFunctionSelector: FC<Props> = ({
                 </Tooltip>
 
                 <span className="uppercase ml-2 text-sm">{t('renderer')}</span>
+
+                {showAddIcon && onAddClick && (
+                    <div
+                        className="ml-2 cursor-pointer hover:text-custom-light-blue"
+                        onClick={onAddClick}
+                        title="Add custom renderer"
+                    >
+                        <CalciteIcon scale="s" icon="plus-circle" />
+                    </div>
+                )}
             </div>
 
             <div
