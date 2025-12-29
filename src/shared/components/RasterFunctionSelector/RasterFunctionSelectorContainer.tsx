@@ -86,14 +86,6 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
     const [showAddRendererDialog, setShowAddRendererDialog] = useState(false);
     const [isSavingRenderer, setIsSavingRenderer] = useState(false);
 
-    const shouldHide = useMemo(() => {
-        if (mode === 'analysis' && analysisTool === 'temporal composite') {
-            return true;
-        }
-
-        return false;
-    }, [mode, analysisTool]);
-
     const shouldDisable = () => {
         if (mode === 'dynamic') {
             return false;
@@ -188,7 +180,7 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
         });
     }, [rasterFunctionName, customRenderers]);
 
-    if (!data || !data.length || shouldHide) {
+    if (!data || !data.length) {
         return null;
     }
 
