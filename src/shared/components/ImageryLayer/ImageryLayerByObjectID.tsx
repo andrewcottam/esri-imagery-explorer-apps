@@ -28,7 +28,10 @@ import { selectChangeCompareLayerIsOn } from '@shared/store/ChangeCompareTool/se
 import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalCompositeTool/selectors';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
 import { selectPendingScreenshotRendererId } from '@shared/store/Renderers/selectors';
-import { pendingScreenshotRendererIdSet } from '@shared/store/Renderers/reducer';
+import {
+    pendingScreenshotRendererIdSet,
+    customRendererImageUpdated,
+} from '@shared/store/Renderers/reducer';
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
 import { updateRendererImage } from '@shared/services/firebase/firestore';
@@ -165,6 +168,14 @@ const ImageryLayerByObjectID: FC<Props> = ({
                     pendingScreenshotRendererId,
                     image,
                     firebaseUser.uid
+                );
+
+                // Update Redux state with the new image
+                dispatch(
+                    customRendererImageUpdated({
+                        rendererId: pendingScreenshotRendererId,
+                        image,
+                    })
                 );
 
                 console.log('Renderer screenshot captured and saved');

@@ -26,7 +26,10 @@ import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
 import GroupLayer from '@arcgis/core/layers/GroupLayer';
 import ImageryLayer from '@arcgis/core/layers/ImageryLayer';
 import { selectPendingScreenshotRendererId } from '@shared/store/Renderers/selectors';
-import { pendingScreenshotRendererIdSet } from '@shared/store/Renderers/reducer';
+import {
+    pendingScreenshotRendererIdSet,
+    customRendererImageUpdated,
+} from '@shared/store/Renderers/reducer';
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import MapView from '@arcgis/core/views/MapView';
 import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
@@ -163,6 +166,14 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
                     pendingScreenshotRendererId,
                     image,
                     firebaseUser.uid
+                );
+
+                // Update Redux state with the new image
+                dispatch(
+                    customRendererImageUpdated({
+                        rendererId: pendingScreenshotRendererId,
+                        image,
+                    })
                 );
 
                 console.log('Renderer screenshot captured and saved');
