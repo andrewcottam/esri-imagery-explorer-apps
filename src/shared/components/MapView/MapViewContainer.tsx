@@ -160,7 +160,18 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
                             centerChanged([center.longitude, center.latitude])
                         );
                         dispatch(zoomChanged(zoom));
-                        dispatch(extentUpdated(extent));
+                        // Convert extent to plain object to avoid non-serializable warning
+                        dispatch(
+                            extentUpdated({
+                                xmin: extent.xmin,
+                                ymin: extent.ymin,
+                                xmax: extent.xmax,
+                                ymax: extent.ymax,
+                                spatialReference: extent.spatialReference
+                                    ? { wkid: extent.spatialReference.wkid }
+                                    : undefined,
+                            })
+                        );
                         dispatch(resolutionUpdated(resolution));
                         dispatch(scaleUpdated(scale));
                     }}
