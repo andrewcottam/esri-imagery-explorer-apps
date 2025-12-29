@@ -211,22 +211,34 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                 showDeleteIcon={isSelectedRendererCustom}
                 onDeleteClick={handleDeleteRenderer}
                 onChange={(rasterFunctionName, rasterFunctionInfo) => {
+                    console.log('Renderer selected:', rasterFunctionName);
+
                     // Check if this is a custom renderer without an image
                     if (rasterFunctionName.startsWith('custom-')) {
+                        console.log('Custom renderer detected');
                         // Extract renderer ID from the name format "custom-{id}"
                         const rendererId = rasterFunctionName.replace(
                             'custom-',
                             ''
                         );
+                        console.log('Renderer ID:', rendererId);
+
                         const customRenderer = customRenderers.find(
                             (r) => r.id === rendererId
                         );
+                        console.log('Custom renderer found:', customRenderer);
 
                         // If found and doesn't have an image, mark it for screenshot capture
                         if (customRenderer && !customRenderer.image) {
+                            console.log(
+                                'Renderer has no image, marking for screenshot capture:',
+                                customRenderer.id
+                            );
                             dispatch(
                                 pendingScreenshotRendererIdSet(customRenderer.id)
                             );
+                        } else if (customRenderer && customRenderer.image) {
+                            console.log('Renderer already has an image');
                         }
                     }
 

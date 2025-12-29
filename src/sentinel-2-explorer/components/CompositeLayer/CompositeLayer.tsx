@@ -143,30 +143,53 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
             !mapView ||
             !firebaseUser
         ) {
+            console.log('Screenshot capture skipped:', {
+                hasPendingId: !!pendingScreenshotRendererId,
+                hasLayer: !!layer,
+                hasMapView: !!mapView,
+                hasUser: !!firebaseUser,
+            });
             return;
         }
+
+        console.log(
+            'Starting screenshot capture for renderer:',
+            pendingScreenshotRendererId
+        );
 
         // Wait for layer to finish rendering
         const handleLayerUpdate = async () => {
             try {
+                console.log('Waiting for layer to load...');
                 // Wait for layer to be loaded and stop updating
                 await layer.when();
+                console.log('Layer loaded');
 
+                console.log('Waiting for map view...');
                 // Wait a bit longer for the view to finish rendering
                 await mapView.when();
+                console.log('Map view ready');
 
                 // Add a small delay to ensure rendering is complete
+                console.log('Waiting 1 second for rendering to complete...');
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Capture screenshot
+                console.log('Capturing screenshot...');
                 const image = await captureMapScreenshot(mapView);
+                console.log('Screenshot captured, size:', image.length);
 
                 // Update renderer in Firestore
+                console.log(
+                    'Updating renderer image in Firestore:',
+                    pendingScreenshotRendererId
+                );
                 await updateRendererImage(
                     pendingScreenshotRendererId,
                     image,
                     firebaseUser.uid
                 );
+                console.log('Firestore updated successfully');
 
                 // Update Redux state with the new image
                 dispatch(
@@ -175,6 +198,7 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
                         image,
                     })
                 );
+                console.log('Redux state updated');
 
                 console.log('Renderer screenshot captured and saved');
 
