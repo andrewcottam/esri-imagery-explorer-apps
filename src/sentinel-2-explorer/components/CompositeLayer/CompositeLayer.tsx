@@ -43,17 +43,6 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
     const layerRef = useRef<ImageryLayer>(null);
     const [layer, setLayer] = useState<ImageryLayer>(null);
 
-    // Map composite method to ArcGIS mosaic operation
-    const mosaicOperationMap = {
-        first: 'MT_FIRST',
-        last: 'MT_LAST',
-        min: 'MT_MIN',
-        max: 'MT_MAX',
-        mean: 'MT_MEAN',
-        blend: 'MT_BLEND',
-        sum: 'MT_SUM',
-    };
-
     // Create mosaic rule for composite
     const compositeMosaicRule = useMemo(() => {
         if (!compositeSceneIds || compositeSceneIds.length === 0) {
@@ -64,7 +53,7 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
             method: 'lock-raster',
             ascending: false,
             lockRasterIds: compositeSceneIds,
-            operation: mosaicOperationMap[compositeMethod],
+            operation: compositeMethod, // Use the method directly (first, last, min, max, mean, blend, sum)
             where: `objectid in (${compositeSceneIds.join(',')})`,
         });
     }, [compositeSceneIds, compositeMethod]);
