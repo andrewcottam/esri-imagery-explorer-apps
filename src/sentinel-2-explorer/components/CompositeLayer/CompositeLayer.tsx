@@ -114,25 +114,6 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
         groupLayer,
     ]);
 
-    // Update mosaic rule when composite settings change
-    useEffect(() => {
-        if (layerRef.current && compositeMosaicRule) {
-            layerRef.current.mosaicRule = compositeMosaicRule;
-        }
-    }, [compositeMosaicRule]);
-
-    // Update raster function when it changes
-    useEffect(() => {
-        if (layerRef.current && queryParams.rasterFunctionName) {
-            // Use full raster function definition if available, otherwise just the function name
-            const rasterFunctionConfig = queryParams.rasterFunctionDefinition
-                ? queryParams.rasterFunctionDefinition
-                : { functionName: queryParams.rasterFunctionName };
-
-            layerRef.current.rasterFunction = rasterFunctionConfig as any;
-        }
-    }, [queryParams.rasterFunctionName, queryParams.rasterFunctionDefinition]);
-
     // Add layer to group when it's created
     useEffect(() => {
         if (groupLayer && layer) {
