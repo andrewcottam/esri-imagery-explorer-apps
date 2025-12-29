@@ -64,7 +64,7 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
             method: 'lock-raster',
             ascending: false,
             lockRasterIds: compositeSceneIds,
-            mosaicOperation: mosaicOperationMap[compositeMethod],
+            operation: mosaicOperationMap[compositeMethod],
             where: `objectid in (${compositeSceneIds.join(',')})`,
         });
     }, [compositeSceneIds, compositeMethod]);
