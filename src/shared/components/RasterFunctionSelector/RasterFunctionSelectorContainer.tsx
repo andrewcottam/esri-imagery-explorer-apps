@@ -76,6 +76,10 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
 
     const isChangeCompareLayerOn = useAppSelector(selectChangeCompareLayerIsOn);
 
+    const isTemporalCompositeLayerOn = useAppSelector(
+        selectIsTemporalCompositeLayerOn
+    );
+
     const { rasterFunctionName, objectIdOfSelectedScene } =
         useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
 
@@ -88,6 +92,11 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
 
     const shouldDisable = () => {
         if (mode === 'dynamic') {
+            return false;
+        }
+
+        // Allow renderer selection when temporal composite is active
+        if (isTemporalCompositeLayerOn) {
             return false;
         }
 
