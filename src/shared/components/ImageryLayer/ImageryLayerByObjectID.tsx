@@ -145,30 +145,53 @@ const ImageryLayerByObjectID: FC<Props> = ({
             !mapView ||
             !firebaseUser
         ) {
+            console.log('ImageryLayerByObjectID: Screenshot capture skipped:', {
+                hasPendingId: !!pendingScreenshotRendererId,
+                hasLayer: !!layer,
+                hasMapView: !!mapView,
+                hasUser: !!firebaseUser,
+            });
             return;
         }
+
+        console.log(
+            'ImageryLayerByObjectID: Starting screenshot capture for renderer:',
+            pendingScreenshotRendererId
+        );
 
         // Wait for layer to finish rendering
         const handleLayerUpdate = async () => {
             try {
+                console.log('ImageryLayerByObjectID: Waiting for layer to load...');
                 // Wait for layer to be loaded and stop updating
                 await layer.when();
+                console.log('ImageryLayerByObjectID: Layer loaded');
 
+                console.log('ImageryLayerByObjectID: Waiting for map view...');
                 // Wait a bit longer for the view to finish rendering
                 await mapView.when();
+                console.log('ImageryLayerByObjectID: Map view ready');
 
                 // Add a small delay to ensure rendering is complete
+                console.log('ImageryLayerByObjectID: Waiting 1 second for rendering to complete...');
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Capture screenshot
+                console.log('ImageryLayerByObjectID: Capturing screenshot...');
                 const image = await captureMapScreenshot(mapView);
+                console.log('ImageryLayerByObjectID: Screenshot captured, size:', image.length);
 
                 // Update renderer in Firestore
+                console.log(
+                    'ImageryLayerByObjectID: Updating renderer image in Firestore:',
+                    pendingScreenshotRendererId
+                );
                 await updateRendererImage(
                     pendingScreenshotRendererId,
                     image,
                     firebaseUser.uid
                 );
+                console.log('ImageryLayerByObjectID: Firestore updated successfully');
 
                 // Update Redux state with the new image
                 dispatch(
@@ -177,8 +200,9 @@ const ImageryLayerByObjectID: FC<Props> = ({
                         image,
                     })
                 );
+                console.log('ImageryLayerByObjectID: Redux state updated');
 
-                console.log('Renderer screenshot captured and saved');
+                console.log('ImageryLayerByObjectID: Renderer screenshot captured and saved');
 
                 // Clear pending screenshot renderer ID
                 dispatch(pendingScreenshotRendererIdSet(null));
