@@ -152,14 +152,17 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
             return;
         }
 
-        // Find the custom renderer by matching the rasterFunction name
-        const customRenderer = customRenderers.find((r) => {
-            const rasterFunction = (r.renderer as any)?.rasterFunction;
-            return rasterFunction === rasterFunctionName;
-        });
+        // Extract renderer ID from the name format "custom-{id}"
+        if (!rasterFunctionName.startsWith('custom-')) {
+            console.error('Selected renderer is not a custom renderer');
+            return;
+        }
+
+        const rendererId = rasterFunctionName.replace('custom-', '');
+        const customRenderer = customRenderers.find((r) => r.id === rendererId);
 
         if (!customRenderer) {
-            console.error('Selected renderer is not a custom renderer');
+            console.error('Custom renderer not found');
             return;
         }
 
@@ -183,10 +186,8 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
             return false;
         }
 
-        return customRenderers.some((r) => {
-            const rasterFunction = (r.renderer as any)?.rasterFunction;
-            return rasterFunction === rasterFunctionName;
-        });
+        // Check if the name starts with "custom-" prefix
+        return rasterFunctionName.startsWith('custom-');
     }, [rasterFunctionName, customRenderers]);
 
     if (!data || !data.length) {
@@ -211,17 +212,15 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                 onDeleteClick={handleDeleteRenderer}
                 onChange={(rasterFunctionName, rasterFunctionInfo) => {
                     // Check if this is a custom renderer without an image
-                    if (
-                        rasterFunctionInfo?.rasterFunctionDefinition &&
-                        !rasterFunctionInfo.legend &&
-                        !rasterFunctionInfo.thumbnail
-                    ) {
-                        // Find the custom renderer by matching the rasterFunction name
-                        const customRenderer = customRenderers.find((r) => {
-                            const rasterFunction = (r.renderer as any)
-                                ?.rasterFunction;
-                            return rasterFunction === rasterFunctionName;
-                        });
+                    if (rasterFunctionName.startsWith('custom-')) {
+                        // Extract renderer ID from the name format "custom-{id}"
+                        const rendererId = rasterFunctionName.replace(
+                            'custom-',
+                            ''
+                        );
+                        const customRenderer = customRenderers.find(
+                            (r) => r.id === rendererId
+                        );
 
                         // If found and doesn't have an image, mark it for screenshot capture
                         if (customRenderer && !customRenderer.image) {
