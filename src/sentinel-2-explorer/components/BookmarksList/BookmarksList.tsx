@@ -74,7 +74,7 @@ export const BookmarksList: FC = () => {
                 zoom: bookmark.zoom,
             },
             renderer: '', // No renderer for bookmarks
-            thumbnail: DEFAULT_BOOKMARK_THUMBNAIL,
+            thumbnail: bookmark.image || DEFAULT_BOOKMARK_THUMBNAIL,
             label: bookmark.name,
             description: `Created ${new Date(bookmark.createdAt).toLocaleDateString()}`,
         }));

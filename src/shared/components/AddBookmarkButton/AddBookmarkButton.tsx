@@ -20,6 +20,7 @@ import { AddBookmarkDialog } from '../AddBookmarkDialog/AddBookmarkDialog';
 import { saveSpatialBookmark } from '@shared/services/firebase/firestore';
 import { useAppSelector } from '@shared/store/configureStore';
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
+import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
 
 type Props = {
     mapView?: MapView;
@@ -43,6 +44,9 @@ export const AddBookmarkButton: FC<Props> = ({ mapView }) => {
         setIsSaving(true);
 
         try {
+            // Capture screenshot before getting other map data
+            const image = await captureMapScreenshot(mapView);
+
             // Get current map view data
             const center = [mapView.center.longitude, mapView.center.latitude];
             const zoom = mapView.zoom;
@@ -53,12 +57,13 @@ export const AddBookmarkButton: FC<Props> = ({ mapView }) => {
                 ymax: mapView.extent.ymax,
             };
 
-            // Save to Firestore
+            // Save to Firestore with image
             await saveSpatialBookmark(
                 projectName,
                 bookmarkName,
                 { center, zoom, extent },
-                user
+                user,
+                image
             );
 
             // Close the dialog

@@ -16,7 +16,7 @@
 import MapView from '@arcgis/core/views/MapView';
 import React, { FC, useEffect } from 'react';
 import { useImageryLayerByObjectId } from './useImageLayer';
-import { useAppSelector } from '@shared/store/configureStore';
+import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import {
     selectQueryParams4SceneInSelectedMode,
     selectAppMode,
@@ -27,6 +27,11 @@ import GroupLayer from '@arcgis/core/layers/GroupLayer';
 import { selectChangeCompareLayerIsOn } from '@shared/store/ChangeCompareTool/selectors';
 import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalCompositeTool/selectors';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
+import { selectPendingScreenshotRendererId } from '@shared/store/Renderers/selectors';
+import { pendingScreenshotRendererIdSet } from '@shared/store/Renderers/reducer';
+import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
+import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
+import { updateRendererImage } from '@shared/services/firebase/firestore';
 
 type Props = {
     serviceUrl: string;
@@ -44,6 +49,7 @@ const ImageryLayerByObjectID: FC<Props> = ({
     groupLayer,
     defaultMosaicRule,
 }: Props) => {
+    const dispatch = useAppDispatch();
     const mode = useAppSelector(selectAppMode);
 
     const {
@@ -61,6 +67,12 @@ const ImageryLayerByObjectID: FC<Props> = ({
     const isTemporalCompositeLayerOn = useAppSelector(
         selectIsTemporalCompositeLayerOn
     );
+
+    const pendingScreenshotRendererId = useAppSelector(
+        selectPendingScreenshotRendererId
+    );
+
+    const firebaseUser = useAppSelector(selectFirebaseUser);
 
     const getVisibility = () => {
         if (mode === 'dynamic') {
@@ -121,6 +133,53 @@ const ImageryLayerByObjectID: FC<Props> = ({
             groupLayer.reorder(layer, 0);
         }
     }, [groupLayer, layer]);
+
+    // Capture screenshot for custom renderer after layer renders
+    useEffect(() => {
+        if (
+            !pendingScreenshotRendererId ||
+            !layer ||
+            !mapView ||
+            !firebaseUser
+        ) {
+            return;
+        }
+
+        // Wait for layer to finish rendering
+        const handleLayerUpdate = async () => {
+            try {
+                // Wait for layer to be loaded and stop updating
+                await layer.when();
+
+                // Wait a bit longer for the view to finish rendering
+                await mapView.when();
+
+                // Add a small delay to ensure rendering is complete
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Capture screenshot
+                const image = await captureMapScreenshot(mapView);
+
+                // Update renderer in Firestore
+                await updateRendererImage(
+                    pendingScreenshotRendererId,
+                    image,
+                    firebaseUser.uid
+                );
+
+                console.log('Renderer screenshot captured and saved');
+
+                // Clear pending screenshot renderer ID
+                dispatch(pendingScreenshotRendererIdSet(null));
+            } catch (error) {
+                console.error('Failed to capture renderer screenshot:', error);
+                // Still clear the pending ID to avoid infinite retries
+                dispatch(pendingScreenshotRendererIdSet(null));
+            }
+        };
+
+        handleLayerUpdate();
+    }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch]);
 
     return null;
 };

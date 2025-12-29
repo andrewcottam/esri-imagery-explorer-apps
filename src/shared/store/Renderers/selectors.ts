@@ -20,3 +20,6 @@ export const selectCustomRenderers = (state: RootState) =>
 
 export const selectCustomRenderersLoading = (state: RootState) =>
     state.Renderers.loading;
+
+export const selectPendingScreenshotRendererId = (state: RootState) =>
+    state.Renderers.pendingScreenshotRendererId;

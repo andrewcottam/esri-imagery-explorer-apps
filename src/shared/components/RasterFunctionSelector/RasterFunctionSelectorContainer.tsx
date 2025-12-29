@@ -31,6 +31,11 @@ import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalComposit
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import { AddRendererDialog } from '../AddRendererDialog/AddRendererDialog';
 import { saveRenderer } from '@shared/services/firebase/firestore';
+import {
+    selectCustomRenderers,
+    selectPendingScreenshotRendererId,
+} from '@shared/store/Renderers/selectors';
+import { pendingScreenshotRendererIdSet } from '@shared/store/Renderers/reducer';
 
 type Props = {
     /**
@@ -68,6 +73,8 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
         useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
 
     const firebaseUser = useAppSelector(selectFirebaseUser);
+
+    const customRenderers = useAppSelector(selectCustomRenderers);
 
     const [showAddRendererDialog, setShowAddRendererDialog] = useState(false);
     const [isSavingRenderer, setIsSavingRenderer] = useState(false);
@@ -143,6 +150,27 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                 showAddIcon={!!firebaseUser}
                 onAddClick={() => setShowAddRendererDialog(true)}
                 onChange={(rasterFunctionName, rasterFunctionInfo) => {
+                    // Check if this is a custom renderer without an image
+                    if (
+                        rasterFunctionInfo?.rasterFunctionDefinition &&
+                        !rasterFunctionInfo.legend &&
+                        !rasterFunctionInfo.thumbnail
+                    ) {
+                        // Find the custom renderer by matching the rasterFunction name
+                        const customRenderer = customRenderers.find((r) => {
+                            const rasterFunction = (r.renderer as any)
+                                ?.rasterFunction;
+                            return rasterFunction === rasterFunctionName;
+                        });
+
+                        // If found and doesn't have an image, mark it for screenshot capture
+                        if (customRenderer && !customRenderer.image) {
+                            dispatch(
+                                pendingScreenshotRendererIdSet(customRenderer.id)
+                            );
+                        }
+                    }
+
                     dispatch(
                         updateRasterFunctionName(
                             rasterFunctionName,

@@ -68,6 +68,10 @@ export type SpatialBookmark = {
     };
     createdAt: number;
     userId: string;
+    /**
+     * Base64 data URL of the bookmark screenshot
+     */
+    image?: string;
 };
 
 /**
@@ -78,6 +82,10 @@ export type RendererConfig = {
     renderer: object; // The JSON renderer configuration
     createdAt: number;
     userId: string;
+    /**
+     * Base64 data URL of the renderer screenshot
+     */
+    image?: string;
 };
 
 /**
@@ -95,6 +103,7 @@ export type RendererData = RendererConfig & {
  * @param bookmarkName - The name of the bookmark
  * @param mapViewData - The current map view data (center, zoom, extent)
  * @param userData - The Firebase user data (uid, email, displayName)
+ * @param image - Optional base64 data URL of the bookmark screenshot
  * @returns Promise<void>
  */
 export const saveSpatialBookmark = async (
@@ -110,7 +119,8 @@ export const saveSpatialBookmark = async (
             ymax: number;
         };
     },
-    userData: FirebaseUserData
+    userData: FirebaseUserData,
+    image?: string
 ): Promise<void> => {
     try {
         const app = getApp();
@@ -146,6 +156,7 @@ export const saveSpatialBookmark = async (
             extent: mapViewData.extent,
             createdAt: Date.now(),
             userId: userData.uid,
+            ...(image && { image }), // Include image if provided
         };
 
         // Add the bookmark to the subcollection
@@ -271,7 +282,8 @@ export const fetchProjectBookmarks = async (
 export const saveRenderer = async (
     name: string,
     renderer: object,
-    userData: FirebaseUserData
+    userData: FirebaseUserData,
+    image?: string
 ): Promise<void> => {
     try {
         const app = getApp();
@@ -290,6 +302,7 @@ export const saveRenderer = async (
             renderer,
             createdAt: Date.now(),
             userId: userData.uid,
+            ...(image && { image }), // Include image if provided
         };
 
         // Add the renderer to the collection
@@ -298,6 +311,43 @@ export const saveRenderer = async (
         console.log('Renderer saved successfully:', { name });
     } catch (error) {
         console.error('Error saving renderer:', error);
+        throw error;
+    }
+};
+
+/**
+ * Update a renderer with an image screenshot
+ * Path: sentinel2-explorer/<userid>/renderers/<renderer_id>
+ *
+ * @param rendererId - The renderer document ID
+ * @param image - Base64 data URL of the renderer screenshot
+ * @param userId - The user ID from Firebase Auth
+ * @returns Promise<void>
+ */
+export const updateRendererImage = async (
+    rendererId: string,
+    image: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Path: sentinel2-explorer/<userid>/renderers/<renderer_id>
+        const rendererDocRef = doc(
+            db,
+            'sentinel2-explorer',
+            userId,
+            'renderers',
+            rendererId
+        );
+
+        // Update the renderer with the image
+        await setDoc(rendererDocRef, { image }, { merge: true });
+
+        console.log('Renderer image updated successfully:', { rendererId });
+    } catch (error) {
+        console.error('Error updating renderer image:', error);
         throw error;
     }
 };

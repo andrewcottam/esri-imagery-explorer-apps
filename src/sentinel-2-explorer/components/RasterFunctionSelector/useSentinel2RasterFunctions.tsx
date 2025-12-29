@@ -111,7 +111,7 @@ export const useSentinel2RasterFunctions = (): RasterFunctionInfo[] => {
                     name: rasterFunctionName,
                     label: renderer.name, // Use the custom name as the label
                     description: `Custom renderer: ${renderer.name}`,
-                    thumbnail: null, // Custom renderers don't have thumbnails
+                    thumbnail: renderer.image || null, // Use captured image if available
                     legend: null,
                     rasterFunctionDefinition: renderer.renderer, // Store the full renderer JSON
                 } as RasterFunctionInfo;

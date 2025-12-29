@@ -25,11 +25,16 @@ export type RenderersState = {
      * Whether renderers are currently being loaded
      */
     loading: boolean;
+    /**
+     * ID of renderer that needs a screenshot captured after next render
+     */
+    pendingScreenshotRendererId: string | null;
 };
 
 export const initialRenderersState: RenderersState = {
     customRenderers: [],
     loading: false,
+    pendingScreenshotRendererId: null,
 };
 
 const slice = createSlice({
@@ -47,6 +52,12 @@ const slice = createSlice({
             state.customRenderers = [];
             state.loading = false;
         },
+        pendingScreenshotRendererIdSet: (
+            state,
+            action: PayloadAction<string | null>
+        ) => {
+            state.pendingScreenshotRendererId = action.payload;
+        },
     },
 });
 
@@ -56,6 +67,7 @@ export const {
     customRenderersLoaded,
     customRenderersLoadingStarted,
     customRenderersCleared,
+    pendingScreenshotRendererIdSet,
 } = slice.actions;
 
 export default reducer;
