@@ -58,6 +58,11 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
     const layerRef = useRef<ImageryLayer>(null);
     const [layer, setLayer] = useState<ImageryLayer>(null);
 
+    // Debug: Log when layer state changes
+    useEffect(() => {
+        console.log('Layer state changed:', !!layer);
+    }, [layer]);
+
     // Create mosaic rule for composite
     const compositeMosaicRule = useMemo(() => {
         if (!compositeSceneIds || compositeSceneIds.length === 0) {
@@ -75,13 +80,21 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
 
     // Initialize the imagery layer when we should show the composite
     useEffect(() => {
+        console.log('Layer initialization effect running:', {
+            showCompositeLayer,
+            hasMosaicRule: !!compositeMosaicRule,
+            rasterFunctionName: queryParams.rasterFunctionName,
+        });
+
         if (
             showCompositeLayer &&
             compositeMosaicRule &&
             queryParams.rasterFunctionName
         ) {
+            console.log('Creating new layer...');
             // Always recreate the layer when renderer changes
             if (layerRef.current && groupLayer) {
+                console.log('Removing old layer');
                 groupLayer.remove(layerRef.current);
                 layerRef.current = null;
             }
@@ -91,13 +104,17 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
                 ? queryParams.rasterFunctionDefinition
                 : { functionName: queryParams.rasterFunctionName };
 
+            console.log('Raster function config:', rasterFunctionConfig);
+
             layerRef.current = new ImageryLayer({
                 url: SENTINEL_2_SERVICE_URL,
                 mosaicRule: compositeMosaicRule,
                 rasterFunction: rasterFunctionConfig,
                 visible: true,
             });
+            console.log('Layer created, calling setLayer');
             setLayer(layerRef.current);
+            console.log('setLayer called');
         } else {
             // Clean up layer when we shouldn't show composite
             if (layerRef.current && groupLayer) {
