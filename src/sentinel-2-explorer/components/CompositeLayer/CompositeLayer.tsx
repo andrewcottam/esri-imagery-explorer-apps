@@ -14,7 +14,7 @@
  */
 
 import React, { FC, useEffect, useMemo, useRef, useState } from 'react';
-import { useAppSelector } from '@shared/store/configureStore';
+import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import {
     selectCompositeSceneIds,
     selectCompositeMethod,
@@ -25,20 +25,32 @@ import { SENTINEL_2_SERVICE_URL } from '@shared/services/sentinel-2/config';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
 import GroupLayer from '@arcgis/core/layers/GroupLayer';
 import ImageryLayer from '@arcgis/core/layers/ImageryLayer';
+import { selectPendingScreenshotRendererId } from '@shared/store/Renderers/selectors';
+import { pendingScreenshotRendererIdSet } from '@shared/store/Renderers/reducer';
+import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
+import MapView from '@arcgis/core/views/MapView';
+import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
+import { updateRendererImage } from '@shared/services/firebase/firestore';
 
 type Props = {
     groupLayer?: GroupLayer;
+    mapView?: MapView;
 };
 
 /**
  * CompositeLayer component renders an imagery layer with multiple scenes
  * composited together using the specified mosaic operation
  */
-export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
+export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
+    const dispatch = useAppDispatch();
     const compositeSceneIds = useAppSelector(selectCompositeSceneIds);
     const compositeMethod = useAppSelector(selectCompositeMethod);
     const showCompositeLayer = useAppSelector(selectShowCompositeLayer);
     const queryParams = useAppSelector(selectQueryParams4MainScene);
+    const pendingScreenshotRendererId = useAppSelector(
+        selectPendingScreenshotRendererId
+    );
+    const firebaseUser = useAppSelector(selectFirebaseUser);
 
     const layerRef = useRef<ImageryLayer>(null);
     const [layer, setLayer] = useState<ImageryLayer>(null);
@@ -60,14 +72,21 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
 
     // Initialize the imagery layer when we should show the composite
     useEffect(() => {
-        if (showCompositeLayer && compositeMosaicRule && queryParams.rasterFunctionName) {
+        if (
+            showCompositeLayer &&
+            compositeMosaicRule &&
+            queryParams.rasterFunctionName
+        ) {
             if (!layerRef.current) {
+                // Use full raster function definition if available, otherwise just the function name
+                const rasterFunctionConfig = queryParams.rasterFunctionDefinition
+                    ? queryParams.rasterFunctionDefinition
+                    : { functionName: queryParams.rasterFunctionName };
+
                 layerRef.current = new ImageryLayer({
                     url: SENTINEL_2_SERVICE_URL,
                     mosaicRule: compositeMosaicRule,
-                    rasterFunction: {
-                        functionName: queryParams.rasterFunctionName,
-                    },
+                    rasterFunction: rasterFunctionConfig,
                     visible: true,
                 });
                 setLayer(layerRef.current);
@@ -80,7 +99,12 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
                 setLayer(null);
             }
         }
-    }, [showCompositeLayer, compositeMosaicRule, queryParams.rasterFunctionName]);
+    }, [
+        showCompositeLayer,
+        compositeMosaicRule,
+        queryParams.rasterFunctionName,
+        queryParams.rasterFunctionDefinition,
+    ]);
 
     // Update mosaic rule when composite settings change
     useEffect(() => {
@@ -92,11 +116,14 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
     // Update raster function when it changes
     useEffect(() => {
         if (layerRef.current && queryParams.rasterFunctionName) {
-            layerRef.current.rasterFunction = {
-                functionName: queryParams.rasterFunctionName,
-            } as any;
+            // Use full raster function definition if available, otherwise just the function name
+            const rasterFunctionConfig = queryParams.rasterFunctionDefinition
+                ? queryParams.rasterFunctionDefinition
+                : { functionName: queryParams.rasterFunctionName };
+
+            layerRef.current.rasterFunction = rasterFunctionConfig as any;
         }
-    }, [queryParams.rasterFunctionName]);
+    }, [queryParams.rasterFunctionName, queryParams.rasterFunctionDefinition]);
 
     // Add layer to group when it's created
     useEffect(() => {
@@ -104,6 +131,53 @@ export const CompositeLayer: FC<Props> = ({ groupLayer }) => {
             groupLayer.add(layer);
         }
     }, [groupLayer, layer]);
+
+    // Capture screenshot for custom renderer after layer renders
+    useEffect(() => {
+        if (
+            !pendingScreenshotRendererId ||
+            !layer ||
+            !mapView ||
+            !firebaseUser
+        ) {
+            return;
+        }
+
+        // Wait for layer to finish rendering
+        const handleLayerUpdate = async () => {
+            try {
+                // Wait for layer to be loaded and stop updating
+                await layer.when();
+
+                // Wait a bit longer for the view to finish rendering
+                await mapView.when();
+
+                // Add a small delay to ensure rendering is complete
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Capture screenshot
+                const image = await captureMapScreenshot(mapView);
+
+                // Update renderer in Firestore
+                await updateRendererImage(
+                    pendingScreenshotRendererId,
+                    image,
+                    firebaseUser.uid
+                );
+
+                console.log('Renderer screenshot captured and saved');
+
+                // Clear pending screenshot renderer ID
+                dispatch(pendingScreenshotRendererIdSet(null));
+            } catch (error) {
+                console.error('Failed to capture renderer screenshot:', error);
+                // Still clear the pending ID to avoid infinite retries
+                dispatch(pendingScreenshotRendererIdSet(null));
+            }
+        };
+
+        handleLayerUpdate();
+    }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch]);
 
     return null;
 };
