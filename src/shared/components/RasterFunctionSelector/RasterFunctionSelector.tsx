@@ -127,7 +127,7 @@ export const RasterFunctionSelector: FC<Props> = ({
 
                 {showDeleteIcon && onDeleteClick && (
                     <div
-                        className="ml-2 cursor-pointer hover:text-red-500"
+                        className="ml-2 cursor-pointer hover:text-red-500 text-xs"
                         onClick={onDeleteClick}
                         title="Delete selected custom renderer"
                     >

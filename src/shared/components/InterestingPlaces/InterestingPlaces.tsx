@@ -75,7 +75,7 @@ export const InterestingPlaces: FC<Props> = ({
                 </span>
                 {onDelete && keyOfSelectedPlace && (
                     <div
-                        className="ml-2 cursor-pointer hover:text-red-500"
+                        className="ml-2 cursor-pointer hover:text-red-500 text-xs"
                         onClick={onDelete}
                         title="Delete selected bookmark"
                     >
