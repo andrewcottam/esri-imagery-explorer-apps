@@ -220,6 +220,10 @@ export type ImageryScenesState = {
      * Method to use for compositing multiple scenes (first, last, min, max, mean, blend, sum)
      */
     compositeMethod: CompositeMethod;
+    /**
+     * Flag indicating whether the composite layer should be shown on the map
+     */
+    showCompositeLayer: boolean;
 };
 
 export const DefaultQueryParams4ImageryScene: QueryParams4ImageryScene = {
@@ -253,6 +257,7 @@ export const initialImagerySceneState: ImageryScenesState = {
     shouldForceSceneReselection: false,
     compositeSceneIds: [],
     compositeMethod: 'max',
+    showCompositeLayer: false,
 };
 
 const slice = createSlice({
@@ -376,6 +381,12 @@ const slice = createSlice({
         ) => {
             state.compositeMethod = action.payload;
         },
+        showCompositeLayerChanged: (
+            state,
+            action: PayloadAction<boolean>
+        ) => {
+            state.showCompositeLayer = action.payload;
+        },
     },
 });
 
@@ -396,6 +407,7 @@ export const {
     shouldForceSceneReselectionUpdated,
     compositeSceneIdsChanged,
     compositeMethodChanged,
+    showCompositeLayerChanged,
 } = slice.actions;
 
 export default reducer;

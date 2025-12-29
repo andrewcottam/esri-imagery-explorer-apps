@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import BottomPanel from '@shared/components/BottomPanel/BottomPanel';
 import { Calendar } from '@shared/components/Calendar';
 import { AppHeader } from '@shared/components/AppHeader';
@@ -22,7 +22,7 @@ import {
     ModeSelector,
 } from '@shared/components/ModeSelector';
 
-import { useAppSelector } from '@shared/store/configureStore';
+import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import {
     selectActiveAnalysisTool,
     selectAppMode,
@@ -60,13 +60,22 @@ import CompositeCalendar from '@shared/components/CompositeCalendar/CompositeCal
 import { CompositeModeSelector } from '@shared/components/CompositeModeSelector/CompositeModeSelector';
 import { CompositeInfoContainer } from '../CompositeInfo/CompositeInfoContainer';
 import { GenerateCompositeButton } from '@shared/components/GenerateCompositeButton/GenerateCompositeButton';
+import { showCompositeLayerChanged } from '@shared/store/ImageryScene/reducer';
 
 const Layout = () => {
     const { t } = useTranslation();
+    const dispatch = useAppDispatch();
 
     const mode = useAppSelector(selectAppMode);
 
     const analysisTool = useAppSelector(selectActiveAnalysisTool);
+
+    // Hide composite layer when exiting composite mode
+    useEffect(() => {
+        if (mode !== 'composite') {
+            dispatch(showCompositeLayerChanged(false));
+        }
+    }, [mode, dispatch]);
 
     const dynamicModeOn = mode === 'dynamic';
 

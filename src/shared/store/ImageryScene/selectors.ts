@@ -136,3 +136,6 @@ export const selectCompositeSceneIds = (state: RootState) =>
 
 export const selectCompositeMethod = (state: RootState) =>
     state.ImageryScenes.compositeMethod;
+
+export const selectShowCompositeLayer = (state: RootState) =>
+    state.ImageryScenes.showCompositeLayer;

@@ -23,7 +23,10 @@ import {
     selectCompositeSceneIds,
 } from '@shared/store/ImageryScene/selectors';
 import { updateAcquisitionDateRange } from '@shared/store/ImageryScene/thunks';
-import { compositeSceneIdsChanged } from '@shared/store/ImageryScene/reducer';
+import {
+    compositeSceneIdsChanged,
+    showCompositeLayerChanged,
+} from '@shared/store/ImageryScene/reducer';
 import classNames from 'classnames';
 import { useFormattedScenesForComposite } from './useFormattedScenesForComposite';
 import { useShouldDisableCalendar } from '../Calendar/useShouldDisableCalendar';
@@ -190,6 +193,7 @@ const CompositeCalendarContainer: FC<Props> = ({ children }: Props) => {
                                 className="cursor-pointer"
                                 onClick={() => {
                                     dispatch(compositeSceneIdsChanged([]));
+                                    dispatch(showCompositeLayerChanged(false));
                                 }}
                             >
                                 <CalciteIcon icon="x-circle" scale="s" />
