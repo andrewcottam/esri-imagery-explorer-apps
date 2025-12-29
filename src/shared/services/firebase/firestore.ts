@@ -80,7 +80,8 @@ export type SpatialBookmark = {
  */
 export type RendererConfig = {
     name: string;
-    renderer: object; // The JSON renderer configuration
+    renderer: object; // The JSON renderer configuration (for in-memory use)
+    rendererJson?: string; // The JSON string for Firestore storage
     createdAt: number;
     userId: string;
     /**
@@ -303,24 +304,31 @@ export const saveRenderer = async (
         const userDocRef = doc(db, 'sentinel2-explorer', userData.uid);
         const renderersCollectionRef = collection(userDocRef, 'renderers');
 
-        // Create the renderer data
-        const rendererData: RendererConfig = {
+        // Convert renderer object to JSON string to avoid nested array issues in Firestore
+        const rendererJson = JSON.stringify(renderer);
+
+        // Create the renderer data for Firestore (without the renderer object, use rendererJson instead)
+        const firestoreData = {
             name,
-            renderer,
+            rendererJson, // Store as JSON string
             createdAt: Date.now(),
             userId: userData.uid,
             ...(image && { image }), // Include image if provided
         };
 
         // Add the renderer to the collection
-        const docRef = await addDoc(renderersCollectionRef, rendererData);
+        const docRef = await addDoc(renderersCollectionRef, firestoreData);
 
         console.log('Renderer saved successfully:', { name });
 
-        // Return the renderer data with ID
+        // Return the renderer data with ID (include the renderer object for app use)
         return {
             id: docRef.id,
-            ...rendererData,
+            name,
+            renderer, // Return the object, not the JSON string
+            createdAt: firestoreData.createdAt,
+            userId: userData.uid,
+            ...(image && { image }),
         };
     } catch (error) {
         console.error('Error saving renderer:', error);
@@ -386,9 +394,16 @@ export const fetchUserRenderers = async (
 
         const renderers: RendererData[] = [];
         querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            // Parse the rendererJson string back to an object
+            const renderer = data.rendererJson
+                ? JSON.parse(data.rendererJson)
+                : data.renderer; // Fallback for old data
+
             renderers.push({
                 id: doc.id,
-                ...doc.data(),
+                ...data,
+                renderer, // Use the parsed object
             } as RendererData);
         });
 
