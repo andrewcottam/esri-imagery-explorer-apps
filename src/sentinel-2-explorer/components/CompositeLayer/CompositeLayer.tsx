@@ -80,20 +80,24 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
             compositeMosaicRule &&
             queryParams.rasterFunctionName
         ) {
-            if (!layerRef.current) {
-                // Use full raster function definition if available, otherwise just the function name
-                const rasterFunctionConfig = queryParams.rasterFunctionDefinition
-                    ? queryParams.rasterFunctionDefinition
-                    : { functionName: queryParams.rasterFunctionName };
-
-                layerRef.current = new ImageryLayer({
-                    url: SENTINEL_2_SERVICE_URL,
-                    mosaicRule: compositeMosaicRule,
-                    rasterFunction: rasterFunctionConfig,
-                    visible: true,
-                });
-                setLayer(layerRef.current);
+            // Always recreate the layer when renderer changes
+            if (layerRef.current && groupLayer) {
+                groupLayer.remove(layerRef.current);
+                layerRef.current = null;
             }
+
+            // Use full raster function definition if available, otherwise just the function name
+            const rasterFunctionConfig = queryParams.rasterFunctionDefinition
+                ? queryParams.rasterFunctionDefinition
+                : { functionName: queryParams.rasterFunctionName };
+
+            layerRef.current = new ImageryLayer({
+                url: SENTINEL_2_SERVICE_URL,
+                mosaicRule: compositeMosaicRule,
+                rasterFunction: rasterFunctionConfig,
+                visible: true,
+            });
+            setLayer(layerRef.current);
         } else {
             // Clean up layer when we shouldn't show composite
             if (layerRef.current && groupLayer) {
@@ -107,6 +111,7 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
         compositeMosaicRule,
         queryParams.rasterFunctionName,
         queryParams.rasterFunctionDefinition,
+        groupLayer,
     ]);
 
     // Update mosaic rule when composite settings change
