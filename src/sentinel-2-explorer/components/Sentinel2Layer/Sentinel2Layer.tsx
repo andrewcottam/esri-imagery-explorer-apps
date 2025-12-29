@@ -42,6 +42,7 @@ export const Sentinel2Layer: FC<Props> = ({ mapView, groupLayer }: Props) => {
 
     return (
         <ImageryLayerByObjectID
+            mapView={mapView}
             groupLayer={groupLayer}
             serviceUrl={SENTINEL_2_SERVICE_URL}
             defaultMosaicRule={defaultMosaicRule}
