@@ -58,7 +58,7 @@ export const AddBookmarkButton: FC<Props> = ({ mapView }) => {
                 projectName,
                 bookmarkName,
                 { center, zoom, extent },
-                user.uid
+                user
             );
 
             // Close the dialog

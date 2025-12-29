@@ -113,7 +113,7 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
 
         try {
             const renderer = JSON.parse(rendererJson);
-            await saveRenderer(name, renderer, firebaseUser.uid);
+            await saveRenderer(name, renderer, firebaseUser);
             console.log('Renderer saved successfully');
             setShowAddRendererDialog(false);
         } catch (error) {

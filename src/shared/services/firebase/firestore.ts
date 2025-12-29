@@ -24,6 +24,34 @@ import {
     where,
 } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
+import { FirebaseUserData } from '@shared/store/Firebase/reducer';
+
+/**
+ * Ensure the user document exists with user metadata
+ * This makes it easier to identify users in Firestore console
+ *
+ * @param userData - The Firebase user data
+ * @returns Promise<void>
+ */
+const ensureUserDocumentExists = async (
+    userData: FirebaseUserData
+): Promise<void> => {
+    const app = getApp();
+    const db = getFirestore(app);
+
+    const userDocRef = doc(db, 'sentinel2-explorer', userData.uid);
+
+    // Create or update the user document with user metadata
+    await setDoc(
+        userDocRef,
+        {
+            email: userData.email,
+            displayName: userData.displayName,
+            lastUpdated: Date.now(),
+        },
+        { merge: true }
+    );
+};
 
 /**
  * Represents a spatial bookmark with map view information
@@ -66,7 +94,7 @@ export type RendererData = RendererConfig & {
  * @param projectName - The project name (document ID in bookmarks collection)
  * @param bookmarkName - The name of the bookmark
  * @param mapViewData - The current map view data (center, zoom, extent)
- * @param userId - The user ID from Firebase Auth
+ * @param userData - The Firebase user data (uid, email, displayName)
  * @returns Promise<void>
  */
 export const saveSpatialBookmark = async (
@@ -82,14 +110,17 @@ export const saveSpatialBookmark = async (
             ymax: number;
         };
     },
-    userId: string
+    userData: FirebaseUserData
 ): Promise<void> => {
     try {
         const app = getApp();
         const db = getFirestore(app);
 
+        // Ensure user document exists with user metadata
+        await ensureUserDocumentExists(userData);
+
         // Path: sentinel2-explorer/<userid>/bookmarks/<project>
-        const userDocRef = doc(db, 'sentinel2-explorer', userId);
+        const userDocRef = doc(db, 'sentinel2-explorer', userData.uid);
         const bookmarksCollectionRef = collection(userDocRef, 'bookmarks');
         const projectDocRef = doc(bookmarksCollectionRef, projectName);
 
@@ -99,7 +130,7 @@ export const saveSpatialBookmark = async (
             {
                 name: projectName,
                 createdAt: Date.now(),
-                userId,
+                userId: userData.uid,
             },
             { merge: true }
         );
@@ -114,7 +145,7 @@ export const saveSpatialBookmark = async (
             zoom: mapViewData.zoom,
             extent: mapViewData.extent,
             createdAt: Date.now(),
-            userId,
+            userId: userData.uid,
         };
 
         // Add the bookmark to the subcollection
@@ -234,20 +265,23 @@ export const fetchProjectBookmarks = async (
  *
  * @param name - The name of the renderer
  * @param renderer - The renderer JSON configuration
- * @param userId - The user ID from Firebase Auth
+ * @param userData - The Firebase user data (uid, email, displayName)
  * @returns Promise<void>
  */
 export const saveRenderer = async (
     name: string,
     renderer: object,
-    userId: string
+    userData: FirebaseUserData
 ): Promise<void> => {
     try {
         const app = getApp();
         const db = getFirestore(app);
 
+        // Ensure user document exists with user metadata
+        await ensureUserDocumentExists(userData);
+
         // Path: sentinel2-explorer/<userid>/renderers
-        const userDocRef = doc(db, 'sentinel2-explorer', userId);
+        const userDocRef = doc(db, 'sentinel2-explorer', userData.uid);
         const renderersCollectionRef = collection(userDocRef, 'renderers');
 
         // Create the renderer data
@@ -255,7 +289,7 @@ export const saveRenderer = async (
             name,
             renderer,
             createdAt: Date.now(),
-            userId,
+            userId: userData.uid,
         };
 
         // Add the renderer to the collection
