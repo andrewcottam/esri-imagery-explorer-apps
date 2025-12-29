@@ -21,7 +21,9 @@ import {
     selectActiveAnalysisTool,
     selectAppMode,
     selectQueryParams4SceneInSelectedMode,
+    selectCompositeSceneIds,
 } from '@shared/store/ImageryScene/selectors';
+import { showCompositeLayerChanged } from '@shared/store/ImageryScene/reducer';
 import { updateRasterFunctionName } from '@shared/store/ImageryScene/thunks';
 import { selectIsAnimationPlaying } from '@shared/store/UI/selectors';
 import { updateTooltipData } from '@shared/store/UI/thunks';
@@ -86,6 +88,8 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
     const firebaseUser = useAppSelector(selectFirebaseUser);
 
     const customRenderers = useAppSelector(selectCustomRenderers);
+
+    const compositeSceneIds = useAppSelector(selectCompositeSceneIds);
 
     const [showAddRendererDialog, setShowAddRendererDialog] = useState(false);
     const [isSavingRenderer, setIsSavingRenderer] = useState(false);
@@ -234,6 +238,19 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                                 'Renderer has no image, marking for screenshot capture:',
                                 customRenderer.id
                             );
+
+                            // If on temporal composite tab, ensure the composite layer is shown
+                            if (
+                                isTemporalCompositeLayerOn &&
+                                compositeSceneIds &&
+                                compositeSceneIds.length >= 2
+                            ) {
+                                console.log(
+                                    'Automatically showing composite layer for screenshot'
+                                );
+                                dispatch(showCompositeLayerChanged(true));
+                            }
+
                             dispatch(
                                 pendingScreenshotRendererIdSet(customRenderer.id)
                             );
