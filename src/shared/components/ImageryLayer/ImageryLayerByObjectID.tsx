@@ -46,8 +46,11 @@ const ImageryLayerByObjectID: FC<Props> = ({
 }: Props) => {
     const mode = useAppSelector(selectAppMode);
 
-    const { rasterFunctionName, objectIdOfSelectedScene } =
-        useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
+    const {
+        rasterFunctionName,
+        rasterFunctionDefinition,
+        objectIdOfSelectedScene,
+    } = useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
 
     const animationStatus = useAppSelector(selectAnimationStatus);
 
@@ -107,6 +110,7 @@ const ImageryLayerByObjectID: FC<Props> = ({
         url: serviceUrl,
         visible: getVisibility(),
         rasterFunction: rasterFunctionName,
+        rasterFunctionDefinition,
         objectId: getObjectId(),
         defaultMosaicRule,
     });

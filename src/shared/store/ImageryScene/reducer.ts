@@ -99,6 +99,11 @@ export type QueryParams4ImageryScene = {
      */
     rasterFunctionName?: string;
     /**
+     * Full raster function definition (for custom renderers with arguments)
+     * This is the complete JSON object that includes rasterFunction and rasterFunctionArguments
+     */
+    rasterFunctionDefinition?: object;
+    /**
      * Object Id of selected Imagery scene.
      *
      * The Object ID of the selected Imagery scene will be automatically determined based on the changes in the `acquisitionDate` or `availableScenes`.

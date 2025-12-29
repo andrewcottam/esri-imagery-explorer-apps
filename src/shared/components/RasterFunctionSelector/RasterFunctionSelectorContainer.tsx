@@ -142,8 +142,13 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                 widthOfTooltipContainer={widthOfTooltipContainer}
                 showAddIcon={!!firebaseUser}
                 onAddClick={() => setShowAddRendererDialog(true)}
-                onChange={(rasterFunctionName) => {
-                    dispatch(updateRasterFunctionName(rasterFunctionName));
+                onChange={(rasterFunctionName, rasterFunctionInfo) => {
+                    dispatch(
+                        updateRasterFunctionName(
+                            rasterFunctionName,
+                            rasterFunctionInfo?.rasterFunctionDefinition
+                        )
+                    );
                 }}
                 itemOnHover={(rasterFunctionData) => {
                     const { label, description, legend } =

@@ -47,9 +47,10 @@ type Props = {
     /**
      * Fires when user selects a new raster function
      * @param name name of new raster function
+     * @param rasterFunctionInfo the full raster function info object
      * @returns
      */
-    onChange: (name: string) => void;
+    onChange: (name: string, rasterFunctionInfo?: RasterFunctionInfo) => void;
     /**
      * Emits when users hovers a grid item in th list
      */
@@ -134,7 +135,7 @@ export const RasterFunctionSelector: FC<Props> = ({
                             selected={selected}
                             disabled={disabled}
                             onClick={() => {
-                                onChange(name);
+                                onChange(name, d);
                             }}
                             onMouseEnter={itemOnHover.bind(null, d)}
                             onMouseLeave={itemOnHover.bind(null, null)}

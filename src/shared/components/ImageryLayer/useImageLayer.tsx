@@ -27,6 +27,11 @@ type Props = {
      */
     rasterFunction: string;
     /**
+     * Full raster function definition (for custom renderers with arguments)
+     * This is the complete JSON object that includes rasterFunction and rasterFunctionArguments
+     */
+    rasterFunctionDefinition?: object;
+    /**
      * object id of the selected scene
      */
     objectId?: number;
@@ -71,6 +76,7 @@ export const useImageryLayerByObjectId = ({
     url,
     visible,
     rasterFunction,
+    rasterFunctionDefinition,
     objectId,
     defaultMosaicRule,
 }: Props) => {
@@ -86,13 +92,16 @@ export const useImageryLayerByObjectId = ({
             ? getLockRasterMosaicRule(objectId)
             : defaultMosaicRule;
 
+        // Use full raster function definition if available, otherwise just the function name
+        const rasterFunctionConfig = rasterFunctionDefinition
+            ? rasterFunctionDefinition
+            : { functionName: rasterFunction };
+
         layerRef.current = new ImageryLayer({
             // URL to the imagery service
             url,
             mosaicRule,
-            rasterFunction: {
-                functionName: rasterFunction,
-            },
+            rasterFunction: rasterFunctionConfig,
             visible,
             // blendMode: 'multiply'
         });
@@ -116,10 +125,13 @@ export const useImageryLayerByObjectId = ({
             return;
         }
 
-        layerRef.current.rasterFunction = {
-            functionName: rasterFunction,
-        } as any;
-    }, [rasterFunction]);
+        // Use full raster function definition if available, otherwise just the function name
+        const rasterFunctionConfig = rasterFunctionDefinition
+            ? rasterFunctionDefinition
+            : { functionName: rasterFunction };
+
+        layerRef.current.rasterFunction = rasterFunctionConfig as any;
+    }, [rasterFunction, rasterFunctionDefinition]);
 
     useEffect(() => {
         (async () => {

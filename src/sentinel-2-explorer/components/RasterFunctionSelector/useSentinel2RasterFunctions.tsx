@@ -113,6 +113,7 @@ export const useSentinel2RasterFunctions = (): RasterFunctionInfo[] => {
                     description: `Custom renderer: ${renderer.name}`,
                     thumbnail: null, // Custom renderers don't have thumbnails
                     legend: null,
+                    rasterFunctionDefinition: renderer.renderer, // Store the full renderer JSON
                 } as RasterFunctionInfo;
             }
         );
