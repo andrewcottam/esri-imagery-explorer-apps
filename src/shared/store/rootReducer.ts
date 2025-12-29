@@ -31,6 +31,7 @@ import PublishAndDownloadJobs from './PublishAndDownloadJobs/reducer';
 import ImageryService from './ImageryService/reducer';
 import Firebase from './Firebase/reducer';
 import Bookmarks from './Bookmarks/reducer';
+import Renderers from './Renderers/reducer';
 
 const reducers = combineReducers({
     Map,
@@ -50,6 +51,7 @@ const reducers = combineReducers({
     PublishAndDownloadJobs,
     Firebase,
     Bookmarks,
+    Renderers,
 });
 
 export default reducers;

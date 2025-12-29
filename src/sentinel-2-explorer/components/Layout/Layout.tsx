@@ -61,12 +61,16 @@ import { CompositeModeSelector } from '@shared/components/CompositeModeSelector/
 import { CompositeInfoContainer } from '../CompositeInfo/CompositeInfoContainer';
 import { GenerateCompositeButton } from '@shared/components/GenerateCompositeButton/GenerateCompositeButton';
 import { showCompositeLayerChanged } from '@shared/store/ImageryScene/reducer';
+import { useFetchCustomRenderers } from '@shared/hooks/useFetchCustomRenderers';
 
 const Layout = () => {
     const { t } = useTranslation();
     const dispatch = useAppDispatch();
 
     const mode = useAppSelector(selectAppMode);
+
+    // Fetch custom renderers when user logs in
+    useFetchCustomRenderers();
 
     const analysisTool = useAppSelector(selectActiveAnalysisTool);
 
