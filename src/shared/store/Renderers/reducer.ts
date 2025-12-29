@@ -58,6 +58,14 @@ const slice = createSlice({
         ) => {
             state.pendingScreenshotRendererId = action.payload;
         },
+        customRendererAdded: (state, action: PayloadAction<RendererData>) => {
+            state.customRenderers.push(action.payload);
+        },
+        customRendererDeleted: (state, action: PayloadAction<string>) => {
+            state.customRenderers = state.customRenderers.filter(
+                (r) => r.id !== action.payload
+            );
+        },
     },
 });
 
@@ -68,6 +76,8 @@ export const {
     customRenderersLoadingStarted,
     customRenderersCleared,
     pendingScreenshotRendererIdSet,
+    customRendererAdded,
+    customRendererDeleted,
 } = slice.actions;
 
 export default reducer;

@@ -63,6 +63,14 @@ type Props = {
      * if true, show the Add icon in the header (only when user is logged in)
      */
     showAddIcon?: boolean;
+    /**
+     * Fires when user clicks the Delete icon to delete a custom renderer
+     */
+    onDeleteClick?: () => void;
+    /**
+     * if true, show the Delete icon in the header (only when there's a selected custom renderer)
+     */
+    showDeleteIcon?: boolean;
 };
 
 export const RasterFunctionSelector: FC<Props> = ({
@@ -75,6 +83,8 @@ export const RasterFunctionSelector: FC<Props> = ({
     itemOnHover,
     onAddClick,
     showAddIcon = false,
+    onDeleteClick,
+    showDeleteIcon = false,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     useGetTooltipPositionOnHover(containerRef);
@@ -112,6 +122,16 @@ export const RasterFunctionSelector: FC<Props> = ({
                         title="Add custom renderer"
                     >
                         <CalciteIcon scale="s" icon="plus-circle" />
+                    </div>
+                )}
+
+                {showDeleteIcon && onDeleteClick && (
+                    <div
+                        className="ml-2 cursor-pointer hover:text-red-500"
+                        onClick={onDeleteClick}
+                        title="Delete selected custom renderer"
+                    >
+                        <CalciteIcon scale="s" icon="trash" />
                     </div>
                 )}
             </div>

@@ -20,6 +20,7 @@ import {
     setDoc,
     addDoc,
     getDocs,
+    deleteDoc,
     query,
     where,
 } from 'firebase/firestore';
@@ -104,7 +105,7 @@ export type RendererData = RendererConfig & {
  * @param mapViewData - The current map view data (center, zoom, extent)
  * @param userData - The Firebase user data (uid, email, displayName)
  * @param image - Optional base64 data URL of the bookmark screenshot
- * @returns Promise<void>
+ * @returns Promise<BookmarkData> - The saved bookmark with ID
  */
 export const saveSpatialBookmark = async (
     projectName: string,
@@ -121,7 +122,7 @@ export const saveSpatialBookmark = async (
     },
     userData: FirebaseUserData,
     image?: string
-): Promise<void> => {
+): Promise<BookmarkData> => {
     try {
         const app = getApp();
         const db = getFirestore(app);
@@ -160,12 +161,18 @@ export const saveSpatialBookmark = async (
         };
 
         // Add the bookmark to the subcollection
-        await addDoc(bookmarkItemsCollectionRef, bookmarkData);
+        const docRef = await addDoc(bookmarkItemsCollectionRef, bookmarkData);
 
         console.log('Spatial bookmark saved successfully:', {
             project: projectName,
             bookmark: bookmarkName,
         });
+
+        // Return the bookmark data with ID
+        return {
+            id: docRef.id,
+            ...bookmarkData,
+        };
     } catch (error) {
         console.error('Error saving spatial bookmark:', error);
         throw error;
@@ -277,14 +284,14 @@ export const fetchProjectBookmarks = async (
  * @param name - The name of the renderer
  * @param renderer - The renderer JSON configuration
  * @param userData - The Firebase user data (uid, email, displayName)
- * @returns Promise<void>
+ * @returns Promise<RendererData> - The saved renderer with ID
  */
 export const saveRenderer = async (
     name: string,
     renderer: object,
     userData: FirebaseUserData,
     image?: string
-): Promise<void> => {
+): Promise<RendererData> => {
     try {
         const app = getApp();
         const db = getFirestore(app);
@@ -306,9 +313,15 @@ export const saveRenderer = async (
         };
 
         // Add the renderer to the collection
-        await addDoc(renderersCollectionRef, rendererData);
+        const docRef = await addDoc(renderersCollectionRef, rendererData);
 
         console.log('Renderer saved successfully:', { name });
+
+        // Return the renderer data with ID
+        return {
+            id: docRef.id,
+            ...rendererData,
+        };
     } catch (error) {
         console.error('Error saving renderer:', error);
         throw error;
@@ -383,6 +396,81 @@ export const fetchUserRenderers = async (
         return renderers;
     } catch (error) {
         console.error('Error fetching user renderers:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a spatial bookmark from Firestore
+ * Path: sentinel2-explorer/<userid>/bookmarks/<project>/items/<bookmark_id>
+ *
+ * @param projectName - The name of the project
+ * @param bookmarkId - The ID of the bookmark to delete
+ * @param userId - The user's ID
+ * @returns Promise<void>
+ */
+export const deleteSpatialBookmark = async (
+    projectName: string,
+    bookmarkId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Path: sentinel2-explorer/<userid>/bookmarks/<project>/items/<bookmark_id>
+        const bookmarkDocRef = doc(
+            db,
+            'sentinel2-explorer',
+            userId,
+            'bookmarks',
+            projectName,
+            'items',
+            bookmarkId
+        );
+
+        await deleteDoc(bookmarkDocRef);
+
+        console.log('Bookmark deleted successfully:', {
+            projectName,
+            bookmarkId,
+        });
+    } catch (error) {
+        console.error('Error deleting bookmark:', error);
+        throw error;
+    }
+};
+
+/**
+ * Delete a renderer from Firestore
+ * Path: sentinel2-explorer/<userid>/renderers/<renderer_id>
+ *
+ * @param rendererId - The ID of the renderer to delete
+ * @param userId - The user's ID
+ * @returns Promise<void>
+ */
+export const deleteRenderer = async (
+    rendererId: string,
+    userId: string
+): Promise<void> => {
+    try {
+        const app = getApp();
+        const db = getFirestore(app);
+
+        // Path: sentinel2-explorer/<userid>/renderers/<renderer_id>
+        const rendererDocRef = doc(
+            db,
+            'sentinel2-explorer',
+            userId,
+            'renderers',
+            rendererId
+        );
+
+        await deleteDoc(rendererDocRef);
+
+        console.log('Renderer deleted successfully:', { rendererId });
+    } catch (error) {
+        console.error('Error deleting renderer:', error);
         throw error;
     }
 };

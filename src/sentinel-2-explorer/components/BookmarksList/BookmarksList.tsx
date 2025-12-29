@@ -26,9 +26,13 @@ import {
     bookmarksLoaded,
     bookmarksLoadingStarted,
     bookmarkSelected,
+    bookmarkDeleted,
 } from '@shared/store/Bookmarks/reducer';
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
-import { fetchProjectBookmarks } from '@shared/services/firebase/firestore';
+import {
+    fetchProjectBookmarks,
+    deleteSpatialBookmark,
+} from '@shared/services/firebase/firestore';
 import type { InterestingPlaceData } from '@typing/shared';
 import { centerChanged, zoomChanged } from '@shared/store/Map/reducer';
 
@@ -91,6 +95,29 @@ export const BookmarksList: FC = () => {
         }
     };
 
+    const handleDeleteBookmark = async () => {
+        if (!user || !selectedProjectId || !selectedBookmarkId) {
+            return;
+        }
+
+        try {
+            // Delete from Firestore
+            await deleteSpatialBookmark(
+                selectedProjectId,
+                selectedBookmarkId,
+                user.uid
+            );
+
+            // Update Redux state
+            dispatch(bookmarkDeleted(selectedBookmarkId));
+
+            console.log('Bookmark deleted successfully');
+        } catch (error) {
+            console.error('Failed to delete bookmark:', error);
+            alert('Failed to delete bookmark. Please try again.');
+        }
+    };
+
     if (!user) {
         return null;
     }
@@ -121,6 +148,7 @@ export const BookmarksList: FC = () => {
             keyOfSelectedPlace={selectedBookmarkId || ''}
             onChange={handleBookmarkChange}
             onHover={() => {}}
+            onDelete={handleDeleteBookmark}
         />
     );
 };

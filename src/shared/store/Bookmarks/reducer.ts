@@ -81,6 +81,18 @@ const slice = createSlice({
         bookmarkSelected: (state, action: PayloadAction<string | null>) => {
             state.selectedBookmarkId = action.payload;
         },
+        bookmarkAdded: (state, action: PayloadAction<BookmarkData>) => {
+            state.bookmarks.push(action.payload);
+        },
+        bookmarkDeleted: (state, action: PayloadAction<string>) => {
+            state.bookmarks = state.bookmarks.filter(
+                (b) => b.id !== action.payload
+            );
+            // Clear selection if the deleted bookmark was selected
+            if (state.selectedBookmarkId === action.payload) {
+                state.selectedBookmarkId = null;
+            }
+        },
         bookmarksCleared: (state) => {
             state.projects = [];
             state.selectedProjectId = null;
@@ -99,6 +111,8 @@ export const {
     bookmarksLoaded,
     bookmarksLoadingStarted,
     bookmarkSelected,
+    bookmarkAdded,
+    bookmarkDeleted,
     bookmarksCleared,
 } = slice.actions;
 

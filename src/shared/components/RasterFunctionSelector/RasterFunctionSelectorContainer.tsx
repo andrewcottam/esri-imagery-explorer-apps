@@ -30,12 +30,19 @@ import { selectChangeCompareLayerIsOn } from '@shared/store/ChangeCompareTool/se
 import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalCompositeTool/selectors';
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import { AddRendererDialog } from '../AddRendererDialog/AddRendererDialog';
-import { saveRenderer } from '@shared/services/firebase/firestore';
+import {
+    saveRenderer,
+    deleteRenderer,
+} from '@shared/services/firebase/firestore';
 import {
     selectCustomRenderers,
     selectPendingScreenshotRendererId,
 } from '@shared/store/Renderers/selectors';
-import { pendingScreenshotRendererIdSet } from '@shared/store/Renderers/reducer';
+import {
+    pendingScreenshotRendererIdSet,
+    customRendererDeleted,
+    customRendererAdded,
+} from '@shared/store/Renderers/reducer';
 
 type Props = {
     /**
@@ -120,7 +127,15 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
 
         try {
             const renderer = JSON.parse(rendererJson);
-            await saveRenderer(name, renderer, firebaseUser);
+            const savedRenderer = await saveRenderer(
+                name,
+                renderer,
+                firebaseUser
+            );
+
+            // Update Redux state
+            dispatch(customRendererAdded(savedRenderer));
+
             console.log('Renderer saved successfully');
             setShowAddRendererDialog(false);
         } catch (error) {
@@ -130,6 +145,48 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
             setIsSavingRenderer(false);
         }
     };
+
+    const handleDeleteRenderer = async () => {
+        if (!firebaseUser || !rasterFunctionName) {
+            return;
+        }
+
+        // Find the custom renderer by matching the rasterFunction name
+        const customRenderer = customRenderers.find((r) => {
+            const rasterFunction = (r.renderer as any)?.rasterFunction;
+            return rasterFunction === rasterFunctionName;
+        });
+
+        if (!customRenderer) {
+            console.error('Selected renderer is not a custom renderer');
+            return;
+        }
+
+        try {
+            // Delete from Firestore
+            await deleteRenderer(customRenderer.id, firebaseUser.uid);
+
+            // Update Redux state
+            dispatch(customRendererDeleted(customRenderer.id));
+
+            console.log('Renderer deleted successfully');
+        } catch (error) {
+            console.error('Failed to delete renderer:', error);
+            alert('Failed to delete renderer. Please try again.');
+        }
+    };
+
+    // Determine if the selected renderer is a custom renderer
+    const isSelectedRendererCustom = useMemo(() => {
+        if (!rasterFunctionName || !customRenderers.length) {
+            return false;
+        }
+
+        return customRenderers.some((r) => {
+            const rasterFunction = (r.renderer as any)?.rasterFunction;
+            return rasterFunction === rasterFunctionName;
+        });
+    }, [rasterFunctionName, customRenderers]);
 
     if (!data || !data.length || shouldHide) {
         return null;
@@ -149,6 +206,8 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                 widthOfTooltipContainer={widthOfTooltipContainer}
                 showAddIcon={!!firebaseUser}
                 onAddClick={() => setShowAddRendererDialog(true)}
+                showDeleteIcon={isSelectedRendererCustom}
+                onDeleteClick={handleDeleteRenderer}
                 onChange={(rasterFunctionName, rasterFunctionInfo) => {
                     // Check if this is a custom renderer without an image
                     if (

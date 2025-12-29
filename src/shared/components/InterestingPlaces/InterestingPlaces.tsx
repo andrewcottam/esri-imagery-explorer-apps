@@ -20,6 +20,7 @@ import { IS_MOBILE_DEVICE } from '@shared/constants/UI';
 import useGetTooltipPositionOnHover from '@shared/hooks/useGetTooltipPositionOnHover';
 import { InterestingPlaceData } from '@typing/shared';
 import { useTranslation } from 'react-i18next';
+import { CalciteIcon } from '@esri/calcite-components-react';
 
 type Props = {
     data: InterestingPlaceData[];
@@ -38,6 +39,11 @@ type Props = {
      * @returns
      */
     onHover: (data: InterestingPlaceData) => void;
+    /**
+     * Optional callback to delete the selected place
+     * If provided, a delete button will be shown in the header
+     */
+    onDelete?: () => void;
 };
 
 export const InterestingPlaces: FC<Props> = ({
@@ -46,6 +52,7 @@ export const InterestingPlaces: FC<Props> = ({
     isThreeColumnGrid,
     onChange,
     onHover,
+    onDelete,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     useGetTooltipPositionOnHover(containerRef);
@@ -62,10 +69,19 @@ export const InterestingPlaces: FC<Props> = ({
             })}
             ref={containerRef}
         >
-            <div className="text-center mb-3">
+            <div className="text-center mb-3 flex items-center justify-center">
                 <span className="uppercase text-sm">
                     {t('interesting_places')}
                 </span>
+                {onDelete && keyOfSelectedPlace && (
+                    <div
+                        className="ml-2 cursor-pointer hover:text-red-500"
+                        onClick={onDelete}
+                        title="Delete selected bookmark"
+                    >
+                        <CalciteIcon scale="s" icon="trash" />
+                    </div>
+                )}
             </div>
 
             <div

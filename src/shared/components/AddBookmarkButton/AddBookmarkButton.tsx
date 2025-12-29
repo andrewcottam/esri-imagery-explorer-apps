@@ -18,15 +18,17 @@ import MapView from '@arcgis/core/views/MapView';
 import { MapActionButton } from '../MapActionButton/MapActionButton';
 import { AddBookmarkDialog } from '../AddBookmarkDialog/AddBookmarkDialog';
 import { saveSpatialBookmark } from '@shared/services/firebase/firestore';
-import { useAppSelector } from '@shared/store/configureStore';
+import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
+import { bookmarkAdded } from '@shared/store/Bookmarks/reducer';
 
 type Props = {
     mapView?: MapView;
 };
 
 export const AddBookmarkButton: FC<Props> = ({ mapView }) => {
+    const dispatch = useAppDispatch();
     const user = useAppSelector(selectFirebaseUser);
     const [showDialog, setShowDialog] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -57,14 +59,17 @@ export const AddBookmarkButton: FC<Props> = ({ mapView }) => {
                 ymax: mapView.extent.ymax,
             };
 
-            // Save to Firestore with image
-            await saveSpatialBookmark(
+            // Save to Firestore with image and get the returned bookmark with ID
+            const savedBookmark = await saveSpatialBookmark(
                 projectName,
                 bookmarkName,
                 { center, zoom, extent },
                 user,
                 image
             );
+
+            // Update Redux state
+            dispatch(bookmarkAdded(savedBookmark));
 
             // Close the dialog
             setShowDialog(false);
