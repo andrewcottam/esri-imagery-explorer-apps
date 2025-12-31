@@ -85,7 +85,10 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
      * Fetch image directly from ImageServer with properly ordered rendering rule
      */
     const fetchImage = async () => {
-        if (!mapView) return;
+        if (!mapView || !mosaicRule) {
+            console.log('CustomRendererImageOverlay: Skip fetch - missing mapView or mosaicRule');
+            return;
+        }
 
         // Cancel previous request if any
         if (abortControllerRef.current) {
@@ -97,6 +100,11 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
         const extent = mapView.extent;
         const width = mapView.width;
         const height = mapView.height;
+
+        if (!extent || !width || !height) {
+            console.log('CustomRendererImageOverlay: Skip fetch - missing extent or dimensions');
+            return;
+        }
 
         // Create properly ordered rendering rule string
         const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
