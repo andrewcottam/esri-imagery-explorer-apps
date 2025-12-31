@@ -16,37 +16,54 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ImageryLayer from '@arcgis/core/layers/ImageryLayer';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
+import RasterFunction from '@arcgis/core/layers/support/RasterFunction';
 
 /**
- * Ensures rasterFunction properties come before rasterFunctionArguments
- * in the object tree to match Esri's expected property order
+ * Recursively ensures rasterFunction comes before rasterFunctionArguments
+ * by using Object.defineProperties to explicitly control property order
  */
-const normalizeRasterFunctionOrder = (obj: any): any => {
-    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+const createOrderedRasterFunction = (obj: any): any => {
+    if (!obj || typeof obj !== 'object') {
         return obj;
     }
 
-    const normalized: any = {};
+    if (Array.isArray(obj)) {
+        return obj.map(item => createOrderedRasterFunction(item));
+    }
 
-    // Always put rasterFunction first if it exists
+    // Create a new object with properties defined in specific order
+    const ordered = {};
+
+    // First, add rasterFunction if it exists
     if (obj.rasterFunction !== undefined) {
-        normalized.rasterFunction = obj.rasterFunction;
+        Object.defineProperty(ordered, 'rasterFunction', {
+            value: obj.rasterFunction,
+            enumerable: true,
+            writable: true,
+            configurable: true
+        });
     }
 
-    // Then add other properties (recursively normalizing nested objects)
-    for (const key in obj) {
-        if (key === 'rasterFunction') continue; // Already added
+    // Then add all other properties, recursively processing nested objects
+    Object.keys(obj).forEach(key => {
+        if (key === 'rasterFunction') return; // Already added
 
-        if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-            normalized[key] = normalizeRasterFunctionOrder(obj[key]);
-        } else if (Array.isArray(obj[key])) {
-            normalized[key] = obj[key].map((item: any) => normalizeRasterFunctionOrder(item));
-        } else {
-            normalized[key] = obj[key];
+        let value = obj[key];
+
+        // Recursively process nested objects and arrays
+        if (value && typeof value === 'object') {
+            value = createOrderedRasterFunction(value);
         }
-    }
 
-    return normalized;
+        Object.defineProperty(ordered, key, {
+            value,
+            enumerable: true,
+            writable: true,
+            configurable: true
+        });
+    });
+
+    return ordered;
 };
 
 type Props = {
@@ -129,11 +146,12 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Normalize property ordering for custom renderers to ensure rasterFunction comes before rasterFunctionArguments
+        // Ensure property ordering for custom renderers
         if (rasterFunctionDefinition) {
-            rasterFunctionConfig = normalizeRasterFunctionOrder(rasterFunctionConfig);
-            console.log('Using custom raster function definition (normalized):');
-            console.log('JSON stringified:', JSON.stringify(rasterFunctionConfig, null, 2));
+            rasterFunctionConfig = createOrderedRasterFunction(rasterFunctionConfig);
+            console.log('Using custom raster function definition (ordered):');
+            console.log('Property keys:', Object.keys(rasterFunctionConfig));
+            console.log('JSON.stringify:', JSON.stringify(rasterFunctionConfig, null, 2));
         }
 
         layerRef.current = new ImageryLayer({
@@ -169,9 +187,9 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Normalize property ordering for custom renderers to ensure rasterFunction comes before rasterFunctionArguments
+        // Ensure property ordering for custom renderers
         if (rasterFunctionDefinition) {
-            rasterFunctionConfig = normalizeRasterFunctionOrder(rasterFunctionConfig);
+            rasterFunctionConfig = createOrderedRasterFunction(rasterFunctionConfig);
         }
 
         layerRef.current.rasterFunction = rasterFunctionConfig as any;
