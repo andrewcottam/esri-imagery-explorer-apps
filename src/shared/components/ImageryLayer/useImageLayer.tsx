@@ -180,11 +180,6 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Convert custom renderers to use RasterFunction class
-        if (rasterFunctionDefinition) {
-            rasterFunctionConfig = convertToRasterFunction(rasterFunctionConfig);
-        }
-
         layerRef.current.rasterFunction = rasterFunctionConfig as any;
     }, [rasterFunction, rasterFunctionDefinition]);
 
