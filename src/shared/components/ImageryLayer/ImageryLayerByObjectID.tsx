@@ -14,7 +14,7 @@
  */
 
 import MapView from '@arcgis/core/views/MapView';
-import React, { FC, useEffect, useMemo, useCallback, useState } from 'react';
+import React, { FC, useEffect, useMemo, useCallback } from 'react';
 import { useImageryLayerByObjectId, getLockRasterMosaicRule } from './useImageLayer';
 import { CustomRendererImageOverlay } from './CustomRendererImageOverlay';
 import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
@@ -36,6 +36,7 @@ import {
 import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
 import { updateRendererImage } from '@shared/services/firebase/firestore';
+import { customRendererLoadingChanged } from '@shared/store/UI/reducer';
 
 type Props = {
     serviceUrl: string;
@@ -77,9 +78,6 @@ const ImageryLayerByObjectID: FC<Props> = ({
     );
 
     const firebaseUser = useAppSelector(selectFirebaseUser);
-
-    // State to track custom renderer loading
-    const [isCustomRendererLoading, setIsCustomRendererLoading] = useState(false);
 
     // Memoize visibility to prevent unnecessary re-renders
     const visibility = useMemo(() => {
@@ -133,10 +131,8 @@ const ImageryLayerByObjectID: FC<Props> = ({
     // Memoize loading change callback to prevent infinite re-renders
     const handleLoadingChange = useCallback((isLoading: boolean) => {
         console.log('CustomRendererImageOverlay loading state:', isLoading);
-        setIsCustomRendererLoading(isLoading);
-        // The loading state is now tracked, but MapView.updating is read-only
-        // MediaLayer operations should trigger mapView.updating automatically
-    }, []);
+        dispatch(customRendererLoadingChanged(isLoading));
+    }, [dispatch]);
 
     // Always call the hook (React rules), but conditionally use the result
     const layer = useImageryLayerByObjectId({

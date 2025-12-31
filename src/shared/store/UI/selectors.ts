@@ -68,3 +68,6 @@ export const selectAppHeaderDropdownPanel = (state: RootState) =>
 
 export const selectHasDisabledLocaleSuggestion = (state: RootState) =>
     state.UI.hasDisabledLocaleSuggestion;
+
+export const selectIsCustomRendererLoading = (state: RootState) =>
+    state.UI.isCustomRendererLoading;

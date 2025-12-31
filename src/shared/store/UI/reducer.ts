@@ -111,6 +111,10 @@ export type UIState = {
      * This is used to prevent repeatedly suggesting a locale after the user has dismissed the suggestion.
      */
     hasDisabledLocaleSuggestion: boolean;
+    /**
+     * if true, custom renderer is currently loading (for showing loading spinner)
+     */
+    isCustomRendererLoading: boolean;
 };
 
 export const initialUIState: UIState = {
@@ -130,6 +134,7 @@ export const initialUIState: UIState = {
     hideNotification: false,
     appHeaderDropdownPanel: null,
     hasDisabledLocaleSuggestion: false,
+    isCustomRendererLoading: false,
 };
 
 const slice = createSlice({
@@ -206,6 +211,12 @@ const slice = createSlice({
         ) => {
             state.hasDisabledLocaleSuggestion = action.payload;
         },
+        customRendererLoadingChanged: (
+            state,
+            action: PayloadAction<boolean>
+        ) => {
+            state.isCustomRendererLoading = action.payload;
+        },
     },
 });
 
@@ -229,6 +240,7 @@ export const {
     hideNotificationToggled,
     appHeaderDropdownPanelChanged,
     hasDisabledLocaleSuggestionChanged,
+    customRendererLoadingChanged,
 } = slice.actions;
 
 export default reducer;
