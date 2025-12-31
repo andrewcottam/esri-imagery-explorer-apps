@@ -125,17 +125,15 @@ const ImageryLayerByObjectID: FC<Props> = ({
     // Use custom overlay for complex renderers, regular ImageryLayer for built-in renderers
     const useCustomOverlay = rasterFunctionDefinition !== undefined && rasterFunctionDefinition !== null;
 
-    // Only create regular layer if NOT using custom overlay
-    const layer = useCustomOverlay
-        ? null
-        : useImageryLayerByObjectId({
-              url: serviceUrl,
-              visible: getVisibility(),
-              rasterFunction: rasterFunctionName,
-              rasterFunctionDefinition,
-              objectId: getObjectId(),
-              defaultMosaicRule,
-          });
+    // Always call the hook (React rules), but conditionally use the result
+    const layer = useImageryLayerByObjectId({
+        url: serviceUrl,
+        visible: useCustomOverlay ? false : getVisibility(), // Hide if using custom overlay
+        rasterFunction: rasterFunctionName,
+        rasterFunctionDefinition: useCustomOverlay ? undefined : rasterFunctionDefinition, // Don't pass to regular layer
+        objectId: getObjectId(),
+        defaultMosaicRule,
+    });
 
     useEffect(() => {
         if (groupLayer && layer && !useCustomOverlay) {
