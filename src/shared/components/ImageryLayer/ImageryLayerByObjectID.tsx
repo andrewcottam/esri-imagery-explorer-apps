@@ -14,7 +14,7 @@
  */
 
 import MapView from '@arcgis/core/views/MapView';
-import React, { FC, useEffect, useMemo } from 'react';
+import React, { FC, useEffect, useMemo, useCallback, useState } from 'react';
 import { useImageryLayerByObjectId, getLockRasterMosaicRule } from './useImageLayer';
 import { CustomRendererImageOverlay } from './CustomRendererImageOverlay';
 import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
@@ -78,7 +78,11 @@ const ImageryLayerByObjectID: FC<Props> = ({
 
     const firebaseUser = useAppSelector(selectFirebaseUser);
 
-    const getVisibility = () => {
+    // State to track custom renderer loading
+    const [isCustomRendererLoading, setIsCustomRendererLoading] = useState(false);
+
+    // Memoize visibility to prevent unnecessary re-renders
+    const visibility = useMemo(() => {
         if (mode === 'dynamic') {
             return true;
         }
@@ -111,27 +115,36 @@ const ImageryLayerByObjectID: FC<Props> = ({
         }
 
         return false;
-    };
+    }, [mode, objectIdOfSelectedScene, analysisTool, changeCompareLayerIsOn, animationStatus]);
 
-    const getObjectId = () => {
+    // Memoize object ID to prevent unnecessary re-renders
+    const objectId = useMemo(() => {
         // should ignore the object id of selected scene if in dynamic mode,
         if (mode === 'dynamic') {
             return null;
         }
 
         return objectIdOfSelectedScene;
-    };
+    }, [mode, objectIdOfSelectedScene]);
 
     // Use custom overlay for complex renderers, regular ImageryLayer for built-in renderers
     const useCustomOverlay = rasterFunctionDefinition !== undefined && rasterFunctionDefinition !== null;
 
+    // Memoize loading change callback to prevent infinite re-renders
+    const handleLoadingChange = useCallback((isLoading: boolean) => {
+        console.log('CustomRendererImageOverlay loading state:', isLoading);
+        setIsCustomRendererLoading(isLoading);
+        // The loading state is now tracked, but MapView.updating is read-only
+        // MediaLayer operations should trigger mapView.updating automatically
+    }, []);
+
     // Always call the hook (React rules), but conditionally use the result
     const layer = useImageryLayerByObjectId({
         url: serviceUrl,
-        visible: useCustomOverlay ? false : getVisibility(), // Hide if using custom overlay
+        visible: useCustomOverlay ? false : visibility, // Hide if using custom overlay
         rasterFunction: rasterFunctionName,
         rasterFunctionDefinition: useCustomOverlay ? undefined : rasterFunctionDefinition, // Don't pass to regular layer
-        objectId: getObjectId(),
+        objectId: objectId,
         defaultMosaicRule,
     });
 
@@ -223,9 +236,8 @@ const ImageryLayerByObjectID: FC<Props> = ({
 
     // Memoize mosaic rule to prevent infinite re-renders
     const mosaicRuleForCustomOverlay = useMemo(() => {
-        const objectId = getObjectId();
         return objectId ? getLockRasterMosaicRule(objectId) : defaultMosaicRule;
-    }, [objectIdOfSelectedScene, mode, defaultMosaicRule]);
+    }, [objectId, defaultMosaicRule]);
 
     // Render custom overlay for complex renderers
     if (useCustomOverlay && rasterFunctionDefinition) {
@@ -235,11 +247,8 @@ const ImageryLayerByObjectID: FC<Props> = ({
                 serviceUrl={serviceUrl}
                 rasterFunctionDefinition={rasterFunctionDefinition}
                 mosaicRule={mosaicRuleForCustomOverlay}
-                visible={getVisibility()}
-                onLoadingChange={(isLoading) => {
-                    console.log('CustomRendererImageOverlay loading state:', isLoading);
-                    // TODO: Could integrate with MapView updating state or custom loading indicator
-                }}
+                visible={visibility}
+                onLoadingChange={handleLoadingChange}
             />
         );
     }
