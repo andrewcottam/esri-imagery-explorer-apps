@@ -15,7 +15,8 @@
 
 import MapView from '@arcgis/core/views/MapView';
 import React, { FC, useEffect } from 'react';
-import { useImageryLayerByObjectId } from './useImageLayer';
+import { useImageryLayerByObjectId, getLockRasterMosaicRule } from './useImageLayer';
+import { CustomRendererImageOverlay } from './CustomRendererImageOverlay';
 import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import {
     selectQueryParams4SceneInSelectedMode,
@@ -121,21 +122,27 @@ const ImageryLayerByObjectID: FC<Props> = ({
         return objectIdOfSelectedScene;
     };
 
-    const layer = useImageryLayerByObjectId({
-        url: serviceUrl,
-        visible: getVisibility(),
-        rasterFunction: rasterFunctionName,
-        rasterFunctionDefinition,
-        objectId: getObjectId(),
-        defaultMosaicRule,
-    });
+    // Use custom overlay for complex renderers, regular ImageryLayer for built-in renderers
+    const useCustomOverlay = rasterFunctionDefinition !== undefined && rasterFunctionDefinition !== null;
+
+    // Only create regular layer if NOT using custom overlay
+    const layer = useCustomOverlay
+        ? null
+        : useImageryLayerByObjectId({
+              url: serviceUrl,
+              visible: getVisibility(),
+              rasterFunction: rasterFunctionName,
+              rasterFunctionDefinition,
+              objectId: getObjectId(),
+              defaultMosaicRule,
+          });
 
     useEffect(() => {
-        if (groupLayer && layer) {
+        if (groupLayer && layer && !useCustomOverlay) {
             groupLayer.add(layer);
             groupLayer.reorder(layer, 0);
         }
-    }, [groupLayer, layer]);
+    }, [groupLayer, layer, useCustomOverlay]);
 
     // Capture screenshot for custom renderer after layer renders
     useEffect(() => {
@@ -215,6 +222,23 @@ const ImageryLayerByObjectID: FC<Props> = ({
 
         handleLayerUpdate();
     }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch]);
+
+    // Render custom overlay for complex renderers
+    if (useCustomOverlay && rasterFunctionDefinition) {
+        const mosaicRule = getObjectId()
+            ? getLockRasterMosaicRule(getObjectId())
+            : defaultMosaicRule;
+
+        return (
+            <CustomRendererImageOverlay
+                mapView={mapView}
+                serviceUrl={serviceUrl}
+                rasterFunctionDefinition={rasterFunctionDefinition}
+                mosaicRule={mosaicRule}
+                visible={getVisibility()}
+            />
+        );
+    }
 
     return null;
 };
