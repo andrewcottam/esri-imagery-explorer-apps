@@ -97,6 +97,12 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
+        // Debug: Log the raster function config
+        if (rasterFunctionDefinition) {
+            console.log('Using custom raster function definition:');
+            console.log('JSON stringified:', JSON.stringify(rasterFunctionConfig, null, 2));
+        }
+
         layerRef.current = new ImageryLayer({
             // URL to the imagery service
             url,
