@@ -14,7 +14,7 @@
  */
 
 import MapView from '@arcgis/core/views/MapView';
-import React, { FC, useEffect } from 'react';
+import React, { FC, useEffect, useMemo } from 'react';
 import { useImageryLayerByObjectId, getLockRasterMosaicRule } from './useImageLayer';
 import { CustomRendererImageOverlay } from './CustomRendererImageOverlay';
 import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
@@ -221,19 +221,25 @@ const ImageryLayerByObjectID: FC<Props> = ({
         handleLayerUpdate();
     }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch]);
 
+    // Memoize mosaic rule to prevent infinite re-renders
+    const mosaicRuleForCustomOverlay = useMemo(() => {
+        const objectId = getObjectId();
+        return objectId ? getLockRasterMosaicRule(objectId) : defaultMosaicRule;
+    }, [objectIdOfSelectedScene, mode, defaultMosaicRule]);
+
     // Render custom overlay for complex renderers
     if (useCustomOverlay && rasterFunctionDefinition) {
-        const mosaicRule = getObjectId()
-            ? getLockRasterMosaicRule(getObjectId())
-            : defaultMosaicRule;
-
         return (
             <CustomRendererImageOverlay
                 mapView={mapView}
                 serviceUrl={serviceUrl}
                 rasterFunctionDefinition={rasterFunctionDefinition}
-                mosaicRule={mosaicRule}
+                mosaicRule={mosaicRuleForCustomOverlay}
                 visible={getVisibility()}
+                onLoadingChange={(isLoading) => {
+                    console.log('CustomRendererImageOverlay loading state:', isLoading);
+                    // TODO: Could integrate with MapView updating state or custom loading indicator
+                }}
             />
         );
     }

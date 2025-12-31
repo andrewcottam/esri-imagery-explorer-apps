@@ -26,6 +26,10 @@ type Props = {
     rasterFunctionDefinition: object;
     mosaicRule: MosaicRule;
     visible: boolean;
+    /**
+     * Callback when loading state changes (for loading spinner integration)
+     */
+    onLoadingChange?: (isLoading: boolean) => void;
 };
 
 /**
@@ -39,6 +43,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
     rasterFunctionDefinition,
     mosaicRule,
     visible,
+    onLoadingChange,
 }) => {
     const layerRef = useRef<MediaLayer>(null);
     const abortControllerRef = useRef<AbortController>(null);
@@ -106,6 +111,11 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             return;
         }
 
+        // Notify that loading has started
+        if (onLoadingChange) {
+            onLoadingChange(true);
+        }
+
         // Create properly ordered rendering rule string
         const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
         console.log('CustomRendererImageOverlay: Rendering rule (ordered):', renderingRuleString);
@@ -158,14 +168,24 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             mapView.map.add(layerRef.current);
 
             console.log('CustomRendererImageOverlay: Image updated successfully');
+
+            // Notify that loading has finished
+            if (onLoadingChange) {
+                onLoadingChange(false);
+            }
         } catch (error: any) {
+            // Notify that loading has finished (even on error)
+            if (onLoadingChange) {
+                onLoadingChange(false);
+            }
+
             if (error.name === 'AbortError') {
                 console.log('CustomRendererImageOverlay: Request aborted');
             } else {
                 console.error('CustomRendererImageOverlay: Error fetching image:', error);
             }
         }
-    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible]);
+    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible, onLoadingChange]);
 
     // Fetch image when extent changes or rendering rule changes
     useEffect(() => {
