@@ -20,6 +20,7 @@ import { IS_MOBILE_DEVICE } from '@shared/constants/UI';
 import useGetTooltipPositionOnHover from '@shared/hooks/useGetTooltipPositionOnHover';
 import { InterestingPlaceData } from '@typing/shared';
 import { useTranslation } from 'react-i18next';
+import { CalciteIcon } from '@esri/calcite-components-react';
 
 type Props = {
     data: InterestingPlaceData[];
@@ -38,6 +39,11 @@ type Props = {
      * @returns
      */
     onHover: (data: InterestingPlaceData) => void;
+    /**
+     * Optional callback to delete the selected place
+     * If provided, a delete button will be shown in the header
+     */
+    onDelete?: () => void;
 };
 
 export const InterestingPlaces: FC<Props> = ({
@@ -46,6 +52,7 @@ export const InterestingPlaces: FC<Props> = ({
     isThreeColumnGrid,
     onChange,
     onHover,
+    onDelete,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     useGetTooltipPositionOnHover(containerRef);
@@ -56,16 +63,25 @@ export const InterestingPlaces: FC<Props> = ({
         <div
             data-testid="interesting-places-container"
             className={classNames({
-                'h-full w-auto mx-8 pr-8 border-r border-custom-light-blue-25':
+                'h-full w-auto mx-4 pr-2 border-r border-custom-light-blue-25':
                     IS_MOBILE_DEVICE === false,
                 'h-auto w-auto my-4 mx-4': IS_MOBILE_DEVICE === true,
             })}
             ref={containerRef}
         >
-            <div className="text-center mb-3">
+            <div className="text-center mb-3 flex items-center justify-center">
                 <span className="uppercase text-sm">
                     {t('interesting_places')}
                 </span>
+                {onDelete && keyOfSelectedPlace && (
+                    <div
+                        className="ml-2 cursor-pointer hover:text-red-500 text-xs"
+                        onClick={onDelete}
+                        title="Delete selected bookmark"
+                    >
+                        <CalciteIcon scale="s" icon="trash" />
+                    </div>
+                )}
             </div>
 
             <div

@@ -20,9 +20,21 @@ import {
     // createAsyncThunk
 } from '@reduxjs/toolkit';
 import Point from '@arcgis/core/geometry/Point';
-import Extent from '@arcgis/core/geometry/Extent';
 
 export type AutoSwipeStatus = 'playing' | 'pausing';
+
+/**
+ * Serializable extent type for Redux state
+ */
+export type SerializableExtent = {
+    xmin: number;
+    ymin: number;
+    xmax: number;
+    ymax: number;
+    spatialReference?: {
+        wkid: number;
+    };
+};
 
 // import { RootState, StoreDispatch, StoreGetState } from '../configureStore';
 
@@ -49,9 +61,9 @@ export type MapState = {
      */
     resolution: number;
     /**
-     * The extent represents the visible portion of a map within the view as an instance of Extent.
+     * The extent represents the visible portion of a map within the view as a serializable extent object.
      */
-    extent: Extent;
+    extent: SerializableExtent;
     /**
      * If true, Map Reference Labels layer will be on
      */
@@ -143,7 +155,7 @@ const slice = createSlice({
         scaleUpdated: (state, action: PayloadAction<number>) => {
             state.scale = action.payload;
         },
-        extentUpdated: (state, action: PayloadAction<Extent>) => {
+        extentUpdated: (state, action: PayloadAction<SerializableExtent>) => {
             state.extent = action.payload;
         },
         showMapLabelToggled: (state) => {

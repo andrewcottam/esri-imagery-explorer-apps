@@ -53,7 +53,7 @@ export const DynamicModeInfo: FC<Props> = ({ content }) => {
     }, []);
 
     return (
-        <div className="max-w-sm ml-4 2xl:ml-10">
+        <div className="max-w-sm ml-2 2xl:ml-6">
             <div className="text-center mb-3">
                 <span className="uppercase text-sm">{t('dynamic_view')}</span>
             </div>

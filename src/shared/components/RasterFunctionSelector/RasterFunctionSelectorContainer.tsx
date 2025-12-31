@@ -21,13 +21,30 @@ import {
     selectActiveAnalysisTool,
     selectAppMode,
     selectQueryParams4SceneInSelectedMode,
+    selectCompositeSceneIds,
 } from '@shared/store/ImageryScene/selectors';
+import { showCompositeLayerChanged } from '@shared/store/ImageryScene/reducer';
 import { updateRasterFunctionName } from '@shared/store/ImageryScene/thunks';
 import { selectIsAnimationPlaying } from '@shared/store/UI/selectors';
 import { updateTooltipData } from '@shared/store/UI/thunks';
 import { RasterFunctionInfo } from '@typing/imagery-service';
 import { selectChangeCompareLayerIsOn } from '@shared/store/ChangeCompareTool/selectors';
 import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalCompositeTool/selectors';
+import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
+import { AddRendererDialog } from '../AddRendererDialog/AddRendererDialog';
+import {
+    saveRenderer,
+    deleteRenderer,
+} from '@shared/services/firebase/firestore';
+import {
+    selectCustomRenderers,
+    selectPendingScreenshotRendererId,
+} from '@shared/store/Renderers/selectors';
+import {
+    pendingScreenshotRendererIdSet,
+    customRendererDeleted,
+    customRendererAdded,
+} from '@shared/store/Renderers/reducer';
 
 type Props = {
     /**
@@ -61,19 +78,29 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
 
     const isChangeCompareLayerOn = useAppSelector(selectChangeCompareLayerIsOn);
 
+    const isTemporalCompositeLayerOn = useAppSelector(
+        selectIsTemporalCompositeLayerOn
+    );
+
     const { rasterFunctionName, objectIdOfSelectedScene } =
         useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
 
-    const shouldHide = useMemo(() => {
-        if (mode === 'analysis' && analysisTool === 'temporal composite') {
-            return true;
-        }
+    const firebaseUser = useAppSelector(selectFirebaseUser);
 
-        return false;
-    }, [mode, analysisTool]);
+    const customRenderers = useAppSelector(selectCustomRenderers);
+
+    const compositeSceneIds = useAppSelector(selectCompositeSceneIds);
+
+    const [showAddRendererDialog, setShowAddRendererDialog] = useState(false);
+    const [isSavingRenderer, setIsSavingRenderer] = useState(false);
 
     const shouldDisable = () => {
         if (mode === 'dynamic') {
+            return false;
+        }
+
+        // Allow renderer selection when temporal composite is active
+        if (isTemporalCompositeLayerOn) {
             return false;
         }
 
@@ -96,7 +123,78 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
         return false;
     };
 
-    if (!data || !data.length || shouldHide) {
+    const handleSaveRenderer = async (name: string, rendererJson: string) => {
+        if (!firebaseUser || isSavingRenderer) {
+            return;
+        }
+
+        setIsSavingRenderer(true);
+
+        try {
+            const renderer = JSON.parse(rendererJson);
+            const savedRenderer = await saveRenderer(
+                name,
+                renderer,
+                firebaseUser
+            );
+
+            // Update Redux state
+            dispatch(customRendererAdded(savedRenderer));
+
+            console.log('Renderer saved successfully');
+            setShowAddRendererDialog(false);
+        } catch (error) {
+            console.error('Error saving renderer:', error);
+            alert(`Error saving renderer: ${error.message || error}`);
+        } finally {
+            setIsSavingRenderer(false);
+        }
+    };
+
+    const handleDeleteRenderer = async () => {
+        if (!firebaseUser || !rasterFunctionName) {
+            return;
+        }
+
+        // Extract renderer ID from the name format "custom-{id}"
+        if (!rasterFunctionName.startsWith('custom-')) {
+            console.error('Selected renderer is not a custom renderer');
+            return;
+        }
+
+        const rendererId = rasterFunctionName.replace('custom-', '');
+        const customRenderer = customRenderers.find((r) => r.id === rendererId);
+
+        if (!customRenderer) {
+            console.error('Custom renderer not found');
+            return;
+        }
+
+        try {
+            // Delete from Firestore
+            await deleteRenderer(customRenderer.id, firebaseUser.uid);
+
+            // Update Redux state
+            dispatch(customRendererDeleted(customRenderer.id));
+
+            console.log('Renderer deleted successfully');
+        } catch (error) {
+            console.error('Failed to delete renderer:', error);
+            alert('Failed to delete renderer. Please try again.');
+        }
+    };
+
+    // Determine if the selected renderer is a custom renderer
+    const isSelectedRendererCustom = useMemo(() => {
+        if (!rasterFunctionName || !customRenderers.length) {
+            return false;
+        }
+
+        // Check if the name starts with "custom-" prefix
+        return rasterFunctionName.startsWith('custom-');
+    }, [rasterFunctionName, customRenderers]);
+
+    if (!data || !data.length) {
         return null;
     }
 
@@ -105,28 +203,91 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
     // }
 
     return (
-        <RasterFunctionSelector
-            headerTooltip={headerTooltip}
-            rasterFunctionInfo={data}
-            nameOfSelectedRasterFunction={rasterFunctionName}
-            disabled={shouldDisable()}
-            widthOfTooltipContainer={widthOfTooltipContainer}
-            onChange={(rasterFunctionName) => {
-                dispatch(updateRasterFunctionName(rasterFunctionName));
-            }}
-            itemOnHover={(rasterFunctionData) => {
-                const { label, description, legend } = rasterFunctionData || {};
+        <>
+            <RasterFunctionSelector
+                headerTooltip={headerTooltip}
+                rasterFunctionInfo={data}
+                nameOfSelectedRasterFunction={rasterFunctionName}
+                disabled={shouldDisable()}
+                widthOfTooltipContainer={widthOfTooltipContainer}
+                showAddIcon={!!firebaseUser}
+                onAddClick={() => setShowAddRendererDialog(true)}
+                showDeleteIcon={isSelectedRendererCustom}
+                onDeleteClick={handleDeleteRenderer}
+                onChange={(rasterFunctionName, rasterFunctionInfo) => {
+                    console.log('Renderer selected:', rasterFunctionName);
 
-                const data = rasterFunctionData
-                    ? {
-                          title: label,
-                          content: description,
-                          legendImage: legend,
-                      }
-                    : null;
+                    // Check if this is a custom renderer without an image
+                    if (rasterFunctionName.startsWith('custom-')) {
+                        console.log('Custom renderer detected');
+                        // Extract renderer ID from the name format "custom-{id}"
+                        const rendererId = rasterFunctionName.replace(
+                            'custom-',
+                            ''
+                        );
+                        console.log('Renderer ID:', rendererId);
 
-                dispatch(updateTooltipData(data));
-            }}
-        />
+                        const customRenderer = customRenderers.find(
+                            (r) => r.id === rendererId
+                        );
+                        console.log('Custom renderer found:', customRenderer);
+
+                        // If found and doesn't have an image, mark it for screenshot capture
+                        if (customRenderer && !customRenderer.image) {
+                            console.log(
+                                'Renderer has no image, marking for screenshot capture:',
+                                customRenderer.id
+                            );
+
+                            // If on temporal composite tab, ensure the composite layer is shown
+                            if (
+                                isTemporalCompositeLayerOn &&
+                                compositeSceneIds &&
+                                compositeSceneIds.length >= 2
+                            ) {
+                                console.log(
+                                    'Automatically showing composite layer for screenshot'
+                                );
+                                dispatch(showCompositeLayerChanged(true));
+                            }
+
+                            dispatch(
+                                pendingScreenshotRendererIdSet(customRenderer.id)
+                            );
+                        } else if (customRenderer && customRenderer.image) {
+                            console.log('Renderer already has an image');
+                        }
+                    }
+
+                    dispatch(
+                        updateRasterFunctionName(
+                            rasterFunctionName,
+                            rasterFunctionInfo?.rasterFunctionDefinition
+                        )
+                    );
+                }}
+                itemOnHover={(rasterFunctionData) => {
+                    const { label, description, legend } =
+                        rasterFunctionData || {};
+
+                    const data = rasterFunctionData
+                        ? {
+                              title: label,
+                              content: description,
+                              legendImage: legend,
+                          }
+                        : null;
+
+                    dispatch(updateTooltipData(data));
+                }}
+            />
+
+            {showAddRendererDialog && (
+                <AddRendererDialog
+                    onClose={() => setShowAddRendererDialog(false)}
+                    onSave={handleSaveRenderer}
+                />
+            )}
+        </>
     );
 };

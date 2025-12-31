@@ -27,6 +27,11 @@ type Props = {
      */
     rasterFunction: string;
     /**
+     * Full raster function definition (for custom renderers with arguments)
+     * This is the complete JSON object that includes rasterFunction and rasterFunctionArguments
+     */
+    rasterFunctionDefinition?: object;
+    /**
      * object id of the selected scene
      */
     objectId?: number;
@@ -71,12 +76,49 @@ export const useImageryLayerByObjectId = ({
     url,
     visible,
     rasterFunction,
+    rasterFunctionDefinition,
     objectId,
     defaultMosaicRule,
 }: Props) => {
     const layerRef = useRef<ImageryLayer>(null);
 
     const [layer, setLayer] = useState<ImageryLayer>();
+
+    /**
+     * Helper to create properly ordered JSON string for rendering rule
+     */
+    const createOrderedRenderingRuleString = (obj: any): string => {
+        if (!obj || typeof obj !== 'object') {
+            return JSON.stringify(obj);
+        }
+
+        if (Array.isArray(obj)) {
+            return '[' + obj.map(item => createOrderedRenderingRuleString(item)).join(',') + ']';
+        }
+
+        const parts: string[] = [];
+
+        // Add rasterFunction first if it exists
+        if (obj.rasterFunction !== undefined) {
+            parts.push(`"rasterFunction":"${obj.rasterFunction}"`);
+        }
+
+        // Add all other properties
+        Object.keys(obj).forEach(key => {
+            if (key === 'rasterFunction') return; // Already added
+
+            const value = obj[key];
+            if (typeof value === 'object') {
+                parts.push(`"${key}":${createOrderedRenderingRuleString(value)}`);
+            } else if (typeof value === 'string') {
+                parts.push(`"${key}":"${value}"`);
+            } else {
+                parts.push(`"${key}":${JSON.stringify(value)}`);
+            }
+        });
+
+        return '{' + parts.join(',') + '}';
+    };
 
     /**
      * initialize imagery layer using mosaic created using the input year
@@ -86,15 +128,32 @@ export const useImageryLayerByObjectId = ({
             ? getLockRasterMosaicRule(objectId)
             : defaultMosaicRule;
 
+        // Use full raster function definition if available, otherwise just the function name
+        let rasterFunctionConfig = rasterFunctionDefinition
+            ? rasterFunctionDefinition
+            : { functionName: rasterFunction };
+
+        let customParameters: any = undefined;
+
+        if (rasterFunctionDefinition) {
+            // Create properly ordered JSON string
+            const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
+            console.log('Rendering rule string (ordered):', renderingRuleString);
+
+            // Try using customParameters to append renderingRule to all requests
+            customParameters = {
+                renderingRule: renderingRuleString
+            };
+
+            console.log('Using customParameters:', customParameters);
+        }
+
         layerRef.current = new ImageryLayer({
-            // URL to the imagery service
             url,
             mosaicRule,
-            rasterFunction: {
-                functionName: rasterFunction,
-            },
+            rasterFunction: rasterFunctionConfig,
+            ...(customParameters && { customParameters }),
             visible,
-            // blendMode: 'multiply'
         });
 
         setLayer(layerRef.current);
@@ -116,10 +175,13 @@ export const useImageryLayerByObjectId = ({
             return;
         }
 
-        layerRef.current.rasterFunction = {
-            functionName: rasterFunction,
-        } as any;
-    }, [rasterFunction]);
+        // Use full raster function definition if available, otherwise just the function name
+        let rasterFunctionConfig = rasterFunctionDefinition
+            ? rasterFunctionDefinition
+            : { functionName: rasterFunction };
+
+        layerRef.current.rasterFunction = rasterFunctionConfig as any;
+    }, [rasterFunction, rasterFunctionDefinition]);
 
     useEffect(() => {
         (async () => {

@@ -28,6 +28,7 @@ import {
     selectAnimationStatus,
     selectHideBottomPanel,
     selectIsAnimationPlaying,
+    selectIsCustomRendererLoading,
 } from '../../store/UI/selectors';
 import EventHandlers from './EventHandlers';
 import { useAppDispatch } from '@shared/store/configureStore';
@@ -96,6 +97,8 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
 
     const anchorLocation = useAppSelector(selectMapPopupAnchorLocation);
 
+    const isCustomRendererLoading = useAppSelector(selectIsCustomRendererLoading);
+
     // const showMagnifier = useMemo(() => {
     //     if (mode !== 'analysis') {
     //         return false;
@@ -109,8 +112,8 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
             return false;
         }
 
-        return isUpdating;
-    }, [isUpdating, isAnimationPlaying]);
+        return isUpdating || isCustomRendererLoading;
+    }, [isUpdating, isAnimationPlaying, isCustomRendererLoading]);
 
     useEffect(() => {
         // console.log('map view zoom and center has changed', center, zoom);
@@ -160,6 +163,18 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
                             centerChanged([center.longitude, center.latitude])
                         );
                         dispatch(zoomChanged(zoom));
+                        // Convert extent to plain object to avoid non-serializable warning
+                        dispatch(
+                            extentUpdated({
+                                xmin: extent.xmin,
+                                ymin: extent.ymin,
+                                xmax: extent.xmax,
+                                ymax: extent.ymax,
+                                spatialReference: extent.spatialReference
+                                    ? { wkid: extent.spatialReference.wkid }
+                                    : undefined,
+                            })
+                        );
                         dispatch(resolutionUpdated(resolution));
                         dispatch(scaleUpdated(scale));
                     }}

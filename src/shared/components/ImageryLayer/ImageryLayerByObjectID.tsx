@@ -14,9 +14,10 @@
  */
 
 import MapView from '@arcgis/core/views/MapView';
-import React, { FC, useEffect } from 'react';
-import { useImageryLayerByObjectId } from './useImageLayer';
-import { useAppSelector } from '@shared/store/configureStore';
+import React, { FC, useEffect, useMemo, useCallback } from 'react';
+import { useImageryLayerByObjectId, getLockRasterMosaicRule } from './useImageLayer';
+import { CustomRendererImageOverlay } from './CustomRendererImageOverlay';
+import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import {
     selectQueryParams4SceneInSelectedMode,
     selectAppMode,
@@ -27,6 +28,15 @@ import GroupLayer from '@arcgis/core/layers/GroupLayer';
 import { selectChangeCompareLayerIsOn } from '@shared/store/ChangeCompareTool/selectors';
 import { selectIsTemporalCompositeLayerOn } from '@shared/store/TemporalCompositeTool/selectors';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
+import { selectPendingScreenshotRendererId } from '@shared/store/Renderers/selectors';
+import {
+    pendingScreenshotRendererIdSet,
+    customRendererImageUpdated,
+} from '@shared/store/Renderers/reducer';
+import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
+import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
+import { updateRendererImage } from '@shared/services/firebase/firestore';
+import { customRendererLoadingChanged } from '@shared/store/UI/reducer';
 
 type Props = {
     serviceUrl: string;
@@ -44,10 +54,14 @@ const ImageryLayerByObjectID: FC<Props> = ({
     groupLayer,
     defaultMosaicRule,
 }: Props) => {
+    const dispatch = useAppDispatch();
     const mode = useAppSelector(selectAppMode);
 
-    const { rasterFunctionName, objectIdOfSelectedScene } =
-        useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
+    const {
+        rasterFunctionName,
+        rasterFunctionDefinition,
+        objectIdOfSelectedScene,
+    } = useAppSelector(selectQueryParams4SceneInSelectedMode) || {};
 
     const animationStatus = useAppSelector(selectAnimationStatus);
 
@@ -59,7 +73,14 @@ const ImageryLayerByObjectID: FC<Props> = ({
         selectIsTemporalCompositeLayerOn
     );
 
-    const getVisibility = () => {
+    const pendingScreenshotRendererId = useAppSelector(
+        selectPendingScreenshotRendererId
+    );
+
+    const firebaseUser = useAppSelector(selectFirebaseUser);
+
+    // Memoize visibility to prevent unnecessary re-renders
+    const visibility = useMemo(() => {
         if (mode === 'dynamic') {
             return true;
         }
@@ -92,31 +113,141 @@ const ImageryLayerByObjectID: FC<Props> = ({
         }
 
         return false;
-    };
+    }, [mode, objectIdOfSelectedScene, analysisTool, changeCompareLayerIsOn, animationStatus]);
 
-    const getObjectId = () => {
+    // Memoize object ID to prevent unnecessary re-renders
+    const objectId = useMemo(() => {
         // should ignore the object id of selected scene if in dynamic mode,
         if (mode === 'dynamic') {
             return null;
         }
 
         return objectIdOfSelectedScene;
-    };
+    }, [mode, objectIdOfSelectedScene]);
 
+    // Use custom overlay for complex renderers, regular ImageryLayer for built-in renderers
+    const useCustomOverlay = rasterFunctionDefinition !== undefined && rasterFunctionDefinition !== null;
+
+    // Memoize loading change callback to prevent infinite re-renders
+    const handleLoadingChange = useCallback((isLoading: boolean) => {
+        console.log('CustomRendererImageOverlay loading state:', isLoading);
+        dispatch(customRendererLoadingChanged(isLoading));
+    }, [dispatch]);
+
+    // Always call the hook (React rules), but conditionally use the result
     const layer = useImageryLayerByObjectId({
         url: serviceUrl,
-        visible: getVisibility(),
+        visible: useCustomOverlay ? false : visibility, // Hide if using custom overlay
         rasterFunction: rasterFunctionName,
-        objectId: getObjectId(),
+        rasterFunctionDefinition: useCustomOverlay ? undefined : rasterFunctionDefinition, // Don't pass to regular layer
+        objectId: objectId,
         defaultMosaicRule,
     });
 
     useEffect(() => {
-        if (groupLayer && layer) {
+        if (groupLayer && layer && !useCustomOverlay) {
             groupLayer.add(layer);
             groupLayer.reorder(layer, 0);
         }
-    }, [groupLayer, layer]);
+    }, [groupLayer, layer, useCustomOverlay]);
+
+    // Capture screenshot for custom renderer after layer renders
+    useEffect(() => {
+        if (
+            !pendingScreenshotRendererId ||
+            !layer ||
+            !mapView ||
+            !firebaseUser
+        ) {
+            console.log('ImageryLayerByObjectID: Screenshot capture skipped:', {
+                hasPendingId: !!pendingScreenshotRendererId,
+                hasLayer: !!layer,
+                hasMapView: !!mapView,
+                hasUser: !!firebaseUser,
+            });
+            return;
+        }
+
+        console.log(
+            'ImageryLayerByObjectID: Starting screenshot capture for renderer:',
+            pendingScreenshotRendererId
+        );
+
+        // Wait for layer to finish rendering
+        const handleLayerUpdate = async () => {
+            try {
+                console.log('ImageryLayerByObjectID: Waiting for layer to load...');
+                // Wait for layer to be loaded and stop updating
+                await layer.when();
+                console.log('ImageryLayerByObjectID: Layer loaded');
+
+                console.log('ImageryLayerByObjectID: Waiting for map view...');
+                // Wait a bit longer for the view to finish rendering
+                await mapView.when();
+                console.log('ImageryLayerByObjectID: Map view ready');
+
+                // Add a small delay to ensure rendering is complete
+                console.log('ImageryLayerByObjectID: Waiting 1 second for rendering to complete...');
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Capture screenshot
+                console.log('ImageryLayerByObjectID: Capturing screenshot...');
+                const image = await captureMapScreenshot(mapView);
+                console.log('ImageryLayerByObjectID: Screenshot captured, size:', image.length);
+
+                // Update renderer in Firestore
+                console.log(
+                    'ImageryLayerByObjectID: Updating renderer image in Firestore:',
+                    pendingScreenshotRendererId
+                );
+                await updateRendererImage(
+                    pendingScreenshotRendererId,
+                    image,
+                    firebaseUser.uid
+                );
+                console.log('ImageryLayerByObjectID: Firestore updated successfully');
+
+                // Update Redux state with the new image
+                dispatch(
+                    customRendererImageUpdated({
+                        rendererId: pendingScreenshotRendererId,
+                        image,
+                    })
+                );
+                console.log('ImageryLayerByObjectID: Redux state updated');
+
+                console.log('ImageryLayerByObjectID: Renderer screenshot captured and saved');
+
+                // Clear pending screenshot renderer ID
+                dispatch(pendingScreenshotRendererIdSet(null));
+            } catch (error) {
+                console.error('Failed to capture renderer screenshot:', error);
+                // Still clear the pending ID to avoid infinite retries
+                dispatch(pendingScreenshotRendererIdSet(null));
+            }
+        };
+
+        handleLayerUpdate();
+    }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch]);
+
+    // Memoize mosaic rule to prevent infinite re-renders
+    const mosaicRuleForCustomOverlay = useMemo(() => {
+        return objectId ? getLockRasterMosaicRule(objectId) : defaultMosaicRule;
+    }, [objectId, defaultMosaicRule]);
+
+    // Render custom overlay for complex renderers
+    if (useCustomOverlay && rasterFunctionDefinition) {
+        return (
+            <CustomRendererImageOverlay
+                mapView={mapView}
+                serviceUrl={serviceUrl}
+                rasterFunctionDefinition={rasterFunctionDefinition}
+                mosaicRule={mosaicRuleForCustomOverlay}
+                visible={visibility}
+                onLoadingChange={handleLoadingChange}
+            />
+        );
+    }
 
     return null;
 };

@@ -29,7 +29,9 @@ import { DateRange } from '@typing/shared';
 /**
  * modes that the user can use to explore the imagery layer/scene
  * - `dynamic` mode to view the mosaicked scenes
+ * - `bookmarks` mode to view saved spatial bookmarks
  * - `find a scene` mode to find and explorer a single scene
+ * - `composite` mode to create composite images from multiple scenes
  * - `swipe` mode to compare two scenes side by side using Swipe widget
  * - `animate` mode to animate a list of scenes
  * - `analysis` mode to analyze the selected scene
@@ -37,7 +39,9 @@ import { DateRange } from '@typing/shared';
  */
 export type AppMode =
     | 'dynamic' // view the mosaicked scenes
+    | 'bookmarks' // view saved spatial bookmarks
     | 'find a scene' // find and explorer a single scene
+    | 'composite' // create composite images from multiple scenes
     | 'swipe' // compare two scenes side by side using Swipe widget
     | 'animate' // animate a list of scenes
     | 'analysis' // analyze the selected scene
@@ -62,6 +66,26 @@ export type AnalysisTool =
     | 'urban heat island'; // urban heat island tool that runs Landsat Surface Intra-Urban Heat Island (SIUHI) workflow.
 
 /**
+ * Methods for compositing multiple scenes together
+ * Maps to ArcGIS Image Server mosaic operations
+ * - `first` first pixel value (MT_FIRST)
+ * - `last` last pixel value (MT_LAST)
+ * - `min` minimum pixel value (MT_MIN)
+ * - `max` maximum pixel value (MT_MAX)
+ * - `mean` mean/average pixel value (MT_MEAN)
+ * - `blend` blend pixel values (MT_BLEND)
+ * - `sum` sum pixel values (MT_SUM)
+ */
+export type CompositeMethod =
+    | 'first'
+    | 'last'
+    | 'min'
+    | 'max'
+    | 'mean'
+    | 'blend'
+    | 'sum';
+
+/**
  * Query Params and Rendering Options for a Imagery Scene (e.g. Landsat or Sentinel-2)
  */
 export type QueryParams4ImageryScene = {
@@ -74,6 +98,11 @@ export type QueryParams4ImageryScene = {
      * name of raster function that will be used to render the Imagery scene
      */
     rasterFunctionName?: string;
+    /**
+     * Full raster function definition (for custom renderers with arguments)
+     * This is the complete JSON object that includes rasterFunction and rasterFunctionArguments
+     */
+    rasterFunctionDefinition?: object;
     /**
      * Object Id of selected Imagery scene.
      *
@@ -188,6 +217,18 @@ export type ImageryScenesState = {
      * will be overridden, and the scene will be reselected from the new list of scenes.
      */
     shouldForceSceneReselection: boolean;
+    /**
+     * Array of object IDs for scenes selected in Composite mode
+     */
+    compositeSceneIds: number[];
+    /**
+     * Method to use for compositing multiple scenes (first, last, min, max, mean, blend, sum)
+     */
+    compositeMethod: CompositeMethod;
+    /**
+     * Flag indicating whether the composite layer should be shown on the map
+     */
+    showCompositeLayer: boolean;
 };
 
 export const DefaultQueryParams4ImageryScene: QueryParams4ImageryScene = {
@@ -219,6 +260,9 @@ export const initialImagerySceneState: ImageryScenesState = {
     },
     cloudCover: 0.5,
     shouldForceSceneReselection: false,
+    compositeSceneIds: [],
+    compositeMethod: 'max',
+    showCompositeLayer: false,
 };
 
 const slice = createSlice({
@@ -330,6 +374,24 @@ const slice = createSlice({
         ) => {
             state.shouldForceSceneReselection = action.payload;
         },
+        compositeSceneIdsChanged: (
+            state,
+            action: PayloadAction<number[]>
+        ) => {
+            state.compositeSceneIds = action.payload;
+        },
+        compositeMethodChanged: (
+            state,
+            action: PayloadAction<CompositeMethod>
+        ) => {
+            state.compositeMethod = action.payload;
+        },
+        showCompositeLayerChanged: (
+            state,
+            action: PayloadAction<boolean>
+        ) => {
+            state.showCompositeLayer = action.payload;
+        },
     },
 });
 
@@ -348,6 +410,9 @@ export const {
     activeAnalysisToolChanged,
     availableImageryScenesUpdated,
     shouldForceSceneReselectionUpdated,
+    compositeSceneIdsChanged,
+    compositeMethodChanged,
+    showCompositeLayerChanged,
 } = slice.actions;
 
 export default reducer;

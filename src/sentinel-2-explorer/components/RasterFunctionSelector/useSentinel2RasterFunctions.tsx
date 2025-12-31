@@ -38,6 +38,7 @@ import NDMILegend from './legends/NDMI_noText.png';
 // import { AppContext } from '@shared/contexts/AppContextProvider';
 import { useAppSelector } from '@shared/store/configureStore';
 import { selectImageryServiceRasterFunctionInfo } from '@shared/store/ImageryService/selectors';
+import { selectCustomRenderers } from '@shared/store/Renderers/selectors';
 
 const Sentinel2RendererThumbnailByName: Record<Sentinel2FunctionName, string> =
     {
@@ -67,7 +68,8 @@ const Sentinel2RendererLegendByName: Record<Sentinel2FunctionName, string> = {
 };
 
 /**
- * Get raster function information that includes thumbnail and legend
+ * Get raster function information that includes thumbnail and legend,
+ * merging built-in renderers with custom renderers from Firestore
  * @returns
  */
 export const useSentinel2RasterFunctions = (): RasterFunctionInfo[] => {
@@ -77,12 +79,15 @@ export const useSentinel2RasterFunctions = (): RasterFunctionInfo[] => {
         selectImageryServiceRasterFunctionInfo
     );
 
+    const customRenderers = useAppSelector(selectCustomRenderers);
+
     const rasterFunctionInfosWithThumbnail = useMemo(() => {
         if (!rasterFunctionInfo) {
             return [];
         }
 
-        return rasterFunctionInfo.map((d) => {
+        // Add thumbnails and legends to built-in renderers
+        const builtInRenderers = rasterFunctionInfo.map((d) => {
             const name: Sentinel2FunctionName = d.name as Sentinel2FunctionName;
 
             const thumbnail = Sentinel2RendererThumbnailByName[name];
@@ -94,7 +99,24 @@ export const useSentinel2RasterFunctions = (): RasterFunctionInfo[] => {
                 legend,
             } as RasterFunctionInfo;
         });
-    }, [rasterFunctionInfo]);
+
+        // Convert custom renderers to RasterFunctionInfo format
+        const customRendererInfos: RasterFunctionInfo[] = customRenderers.map(
+            (renderer) => {
+                return {
+                    name: `custom-${renderer.id}`, // Use unique ID as the name to avoid conflicts
+                    label: renderer.name, // Use the custom name as the label
+                    description: `Custom renderer: ${renderer.name}`,
+                    thumbnail: renderer.image || null, // Use captured image if available
+                    legend: null,
+                    rasterFunctionDefinition: renderer.renderer, // Store the full renderer JSON
+                } as RasterFunctionInfo;
+            }
+        );
+
+        // Merge built-in and custom renderers
+        return [...builtInRenderers, ...customRendererInfos];
+    }, [rasterFunctionInfo, customRenderers]);
 
     return rasterFunctionInfosWithThumbnail;
 };

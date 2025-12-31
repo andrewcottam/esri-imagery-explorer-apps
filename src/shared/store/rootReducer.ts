@@ -29,6 +29,9 @@ import LandcoverExplorer from './LandcoverExplorer/reducer';
 import Sentinel1 from './Sentinel1/reducer';
 import PublishAndDownloadJobs from './PublishAndDownloadJobs/reducer';
 import ImageryService from './ImageryService/reducer';
+import Firebase from './Firebase/reducer';
+import Bookmarks from './Bookmarks/reducer';
+import Renderers from './Renderers/reducer';
 
 const reducers = combineReducers({
     Map,
@@ -46,6 +49,9 @@ const reducers = combineReducers({
     SpectralSamplingTool,
     TemporalCompositeTool,
     PublishAndDownloadJobs,
+    Firebase,
+    Bookmarks,
+    Renderers,
 });
 
 export default reducers;

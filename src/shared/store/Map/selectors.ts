@@ -15,6 +15,7 @@
 
 import { createSelector } from '@reduxjs/toolkit';
 import { RootState } from '../configureStore';
+import Extent from '@arcgis/core/geometry/Extent';
 
 // export const selectWebmapId = createSelector(
 //     (state: RootState) => state.Map.webmapId,
@@ -36,7 +37,30 @@ export const selectMapCenter = createSelector(
 
 export const selectMapZoom = (state: RootState) => state.Map.zoom;
 
-export const selectMapExtent = (state: RootState) => state.Map.extent;
+/**
+ * Returns the serializable extent object from Redux state
+ */
+export const selectSerializableMapExtent = (state: RootState) => state.Map.extent;
+
+/**
+ * Returns an ArcGIS Extent object created from the serializable extent in Redux state
+ * Use this selector when you need an Extent instance (e.g., for ArcGIS API calls)
+ */
+export const selectMapExtent = createSelector(
+    selectSerializableMapExtent,
+    (serializableExtent) => {
+        if (!serializableExtent) {
+            return null;
+        }
+        return new Extent({
+            xmin: serializableExtent.xmin,
+            ymin: serializableExtent.ymin,
+            xmax: serializableExtent.xmax,
+            ymax: serializableExtent.ymax,
+            spatialReference: serializableExtent.spatialReference,
+        });
+    }
+);
 
 export const selectMapResolution = (state: RootState) => state.Map.resolution;
 

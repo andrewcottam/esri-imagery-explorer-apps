@@ -245,6 +245,15 @@ module.exports = (env, options) => {
                  * Optional: defaults to `f8770e0adc5c41038026494b871ceb99` if not specified.
                  */
                 ENV_WEB_MAP_ID: JSON.stringify(envConfig.IMAGERY_EXPLORER_WEB_MAP_ID),
+                /**
+                 * Firebase configuration for Google SSO authentication
+                 */
+                ENV_FIREBASE_API_KEY: JSON.stringify(envConfig.FIREBASE_API_KEY),
+                ENV_FIREBASE_AUTH_DOMAIN: JSON.stringify(envConfig.FIREBASE_AUTH_DOMAIN),
+                ENV_FIREBASE_PROJECT_ID: JSON.stringify(envConfig.FIREBASE_PROJECT_ID),
+                ENV_FIREBASE_STORAGE_BUCKET: JSON.stringify(envConfig.FIREBASE_STORAGE_BUCKET),
+                ENV_FIREBASE_MESSAGING_SENDER_ID: JSON.stringify(envConfig.FIREBASE_MESSAGING_SENDER_ID),
+                ENV_FIREBASE_APP_ID: JSON.stringify(envConfig.FIREBASE_APP_ID),
             }),
             new MiniCssExtractPlugin({
                 // Options similar to the same options in webpackOptions.output

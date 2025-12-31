@@ -38,6 +38,11 @@ export type RasterFunctionInfo = {
      * URL of the legend image
      */
     legend?: string;
+    /**
+     * Full raster function definition (for custom renderers with arguments)
+     * This is the complete JSON object that includes rasterFunction and rasterFunctionArguments
+     */
+    rasterFunctionDefinition?: object;
 };
 
 /**

@@ -97,7 +97,7 @@ export const updateQueryParams4SceneInSelectedMode =
     };
 
 export const updateRasterFunctionName =
-    (rasterFunctionName: string) =>
+    (rasterFunctionName: string, rasterFunctionDefinition?: object) =>
     async (dispatch: StoreDispatch, getState: StoreGetState) => {
         try {
             const queryParams =
@@ -112,6 +112,7 @@ export const updateRasterFunctionName =
             const updatedQueryParams: QueryParams4ImageryScene = {
                 ...queryParams,
                 rasterFunctionName,
+                rasterFunctionDefinition,
             };
 
             dispatch(updateQueryParams4SceneInSelectedMode(updatedQueryParams));

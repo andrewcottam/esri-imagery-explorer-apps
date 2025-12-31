@@ -21,7 +21,7 @@ import { ContainerOfSecondaryControls } from './ContainerOfSecondaryControls';
 import { useTranslation } from 'react-i18next';
 
 const modes: AppMode[] = ['swipe', 'animate', 'analysis'];
-const exploreModes: AppMode[] = ['dynamic', 'find a scene'];
+const exploreModes: AppMode[] = ['dynamic', 'bookmarks', 'find a scene', 'composite'];
 
 type Props = {
     /**
@@ -62,7 +62,10 @@ export const ModeSelector: FC<Props> = ({
     };
 
     const isExploreButtonSelected =
-        selectedMode === 'find a scene' || selectedMode === 'dynamic';
+        selectedMode === 'find a scene' ||
+        selectedMode === 'bookmarks' ||
+        selectedMode === 'dynamic' ||
+        selectedMode === 'composite';
 
     return (
         <>
@@ -71,7 +74,7 @@ export const ModeSelector: FC<Props> = ({
                     'is-disabled': disabled,
                 })}
             >
-                {/* this is button to enable selection of either 'find a scene' or 'dynamic' mode */}
+                {/* this is button to enable selection of either 'find a scene', 'bookmarks', or 'dynamic' mode */}
                 <div className={classNames(ButtonWrapperClassnames)}>
                     <Button
                         fullHeight={true}

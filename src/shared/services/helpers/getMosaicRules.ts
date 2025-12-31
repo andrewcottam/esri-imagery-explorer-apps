@@ -57,3 +57,35 @@ export const getByAttributeMosaicRule = (
         sortValue,
     };
 };
+
+/**
+ * Get mosaic rule for compositing multiple scenes using the specified method
+ * @param objectIds Array of object IDs to include in the composite
+ * @param method Composite method (maps to ArcGIS mosaic operations)
+ * @returns Mosaic rule object
+ *
+ * @see https://developers.arcgis.com/rest/services-reference/enterprise/mosaic-rules/
+ */
+export const getCompositeMosaicRule = (
+    objectIds: number[],
+    method: 'first' | 'last' | 'min' | 'max' | 'mean' | 'blend' | 'sum'
+) => {
+    // Map composite methods to ArcGIS mosaic operations
+    const mosaicOperationMap = {
+        first: 'MT_FIRST',
+        last: 'MT_LAST',
+        min: 'MT_MIN',
+        max: 'MT_MAX',
+        mean: 'MT_MEAN',
+        blend: 'MT_BLEND',
+        sum: 'MT_SUM',
+    };
+
+    return {
+        ascending: false,
+        lockRasterIds: objectIds,
+        mosaicMethod: 'esriMosaicLockRaster',
+        mosaicOperation: mosaicOperationMap[method],
+        where: `objectid in (${objectIds.join(',')})`,
+    };
+};

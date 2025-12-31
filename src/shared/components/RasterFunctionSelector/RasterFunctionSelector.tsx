@@ -47,13 +47,30 @@ type Props = {
     /**
      * Fires when user selects a new raster function
      * @param name name of new raster function
+     * @param rasterFunctionInfo the full raster function info object
      * @returns
      */
-    onChange: (name: string) => void;
+    onChange: (name: string, rasterFunctionInfo?: RasterFunctionInfo) => void;
     /**
      * Emits when users hovers a grid item in th list
      */
     itemOnHover: (data?: RasterFunctionInfo) => void;
+    /**
+     * Fires when user clicks the Add icon to add a custom renderer
+     */
+    onAddClick?: () => void;
+    /**
+     * if true, show the Add icon in the header (only when user is logged in)
+     */
+    showAddIcon?: boolean;
+    /**
+     * Fires when user clicks the Delete icon to delete a custom renderer
+     */
+    onDeleteClick?: () => void;
+    /**
+     * if true, show the Delete icon in the header (only when there's a selected custom renderer)
+     */
+    showDeleteIcon?: boolean;
 };
 
 export const RasterFunctionSelector: FC<Props> = ({
@@ -64,6 +81,10 @@ export const RasterFunctionSelector: FC<Props> = ({
     widthOfTooltipContainer,
     onChange,
     itemOnHover,
+    onAddClick,
+    showAddIcon = false,
+    onDeleteClick,
+    showDeleteIcon = false,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     useGetTooltipPositionOnHover(containerRef);
@@ -93,10 +114,30 @@ export const RasterFunctionSelector: FC<Props> = ({
                 </Tooltip>
 
                 <span className="uppercase ml-2 text-sm">{t('renderer')}</span>
+
+                {showAddIcon && onAddClick && (
+                    <div
+                        className="ml-2 cursor-pointer hover:text-custom-light-blue"
+                        onClick={onAddClick}
+                        title="Add custom renderer"
+                    >
+                        <CalciteIcon scale="s" icon="plus-circle" />
+                    </div>
+                )}
+
+                {showDeleteIcon && onDeleteClick && (
+                    <div
+                        className="ml-2 cursor-pointer hover:text-red-500 text-xs"
+                        onClick={onDeleteClick}
+                        title="Delete selected custom renderer"
+                    >
+                        <CalciteIcon scale="s" icon="trash" />
+                    </div>
+                )}
             </div>
 
             <div
-                className="flex flex-wrap max-w-[310px] justify-center gap-[5px] max-h-[155px] pr-1 overflow-x-hidden overflow-y-auto fancy-scrollbar"
+                className="flex flex-wrap max-w-[245px] justify-center gap-[5px] max-h-[155px] pr-1 overflow-x-hidden overflow-y-auto fancy-scrollbar"
                 data-testid="renderer-selector-container"
             >
                 {rasterFunctionInfo.map((d) => {
@@ -114,7 +155,7 @@ export const RasterFunctionSelector: FC<Props> = ({
                             selected={selected}
                             disabled={disabled}
                             onClick={() => {
-                                onChange(name);
+                                onChange(name, d);
                             }}
                             onMouseEnter={itemOnHover.bind(null, d)}
                             onMouseLeave={itemOnHover.bind(null, null)}

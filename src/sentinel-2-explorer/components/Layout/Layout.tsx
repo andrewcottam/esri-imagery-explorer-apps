@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import BottomPanel from '@shared/components/BottomPanel/BottomPanel';
 import { Calendar } from '@shared/components/Calendar';
 import { AppHeader } from '@shared/components/AppHeader';
@@ -22,7 +22,7 @@ import {
     ModeSelector,
 } from '@shared/components/ModeSelector';
 
-import { useAppSelector } from '@shared/store/configureStore';
+import { useAppDispatch, useAppSelector } from '@shared/store/configureStore';
 import {
     selectActiveAnalysisTool,
     selectAppMode,
@@ -54,15 +54,38 @@ import { Sentinel2TemporalProfileTool } from '../Sentinel2TemporalProfileTool/Se
 import { Sentinel2SavePanel } from '../Sentinel2SavePanel';
 import { Sentinel2InterestingPlaces } from '../Sentinel2InterestingPlaces';
 import { useTranslation } from 'react-i18next';
+import { ProjectsList } from '@shared/components/ProjectsList/ProjectsList';
+import { BookmarksList } from '../BookmarksList/BookmarksList';
+import CompositeCalendar from '@shared/components/CompositeCalendar/CompositeCalendarContainer';
+import { CompositeModeSelector } from '@shared/components/CompositeModeSelector/CompositeModeSelector';
+import { CompositeInfoContainer } from '../CompositeInfo/CompositeInfoContainer';
+import { GenerateCompositeButton } from '@shared/components/GenerateCompositeButton/GenerateCompositeButton';
+import { showCompositeLayerChanged } from '@shared/store/ImageryScene/reducer';
+import { useFetchCustomRenderers } from '@shared/hooks/useFetchCustomRenderers';
 
 const Layout = () => {
     const { t } = useTranslation();
+    const dispatch = useAppDispatch();
 
     const mode = useAppSelector(selectAppMode);
 
+    // Fetch custom renderers when user logs in
+    useFetchCustomRenderers();
+
     const analysisTool = useAppSelector(selectActiveAnalysisTool);
 
+    // Hide composite layer when exiting composite mode
+    useEffect(() => {
+        if (mode !== 'composite') {
+            dispatch(showCompositeLayerChanged(false));
+        }
+    }, [mode, dispatch]);
+
     const dynamicModeOn = mode === 'dynamic';
+
+    const bookmarksModeOn = mode === 'bookmarks';
+
+    const compositeModeOn = mode === 'composite';
 
     const shouldShowSecondaryControls = useShouldShowSecondaryControls();
 
@@ -113,36 +136,62 @@ const Layout = () => {
                             <ChangeCompareLayerSelector />
                         </ContainerOfSecondaryControls>
                     )}
+
+                    {bookmarksModeOn && (
+                        <ContainerOfSecondaryControls>
+                            <ProjectsList />
+                        </ContainerOfSecondaryControls>
+                    )}
                 </div>
 
-                <div className="flex flex-grow justify-center shrink-0">
-                    {dynamicModeOn ? (
-                        <>
-                            <Sentinel2DynamicModeInfo />
-                            <Sentinel2InterestingPlaces />
-                        </>
-                    ) : (
-                        <>
-                            <div className="ml-2 3xl:ml-0">
-                                <Calendar>
-                                    <CloudFilter />
-                                </Calendar>
-                            </div>
-
-                            {mode === 'analysis' && (
-                                <div className="analyze-tool-and-scene-info-container">
-                                    <Sentinel2MaskTool />
-                                    <Sentinel2TemporalProfileTool />
-                                    <Sentinel2SpectralProfileTool />
-                                    <Sentinel2ChangeCompareTool />
+                <div className="flex flex-grow shrink-0">
+                    <div className="flex flex-grow justify-center">
+                        {dynamicModeOn ? (
+                            <>
+                                <Sentinel2DynamicModeInfo />
+                                <Sentinel2InterestingPlaces />
+                            </>
+                        ) : bookmarksModeOn ? (
+                            <BookmarksList />
+                        ) : compositeModeOn ? (
+                            <>
+                                <div className="ml-2 3xl:ml-0">
+                                    <CompositeCalendar>
+                                        <CloudFilter />
+                                    </CompositeCalendar>
+                                    <div className="mt-2 flex gap-2">
+                                        <GenerateCompositeButton />
+                                        <CompositeModeSelector />
+                                    </div>
                                 </div>
-                            )}
 
-                            <SceneInfo />
-                        </>
-                    )}
+                                <CompositeInfoContainer />
+                            </>
+                        ) : (
+                            <>
+                                <div className="ml-2 3xl:ml-0">
+                                    <Calendar>
+                                        <CloudFilter />
+                                    </Calendar>
+                                </div>
 
-                    <Sentinel2RasterFunctionSelector />
+                                {mode === 'analysis' && (
+                                    <div className="analyze-tool-and-scene-info-container">
+                                        <Sentinel2MaskTool />
+                                        <Sentinel2TemporalProfileTool />
+                                        <Sentinel2SpectralProfileTool />
+                                        <Sentinel2ChangeCompareTool />
+                                    </div>
+                                )}
+
+                                <SceneInfo />
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex-shrink-0 mr-4">
+                        <Sentinel2RasterFunctionSelector />
+                    </div>
                 </div>
             </BottomPanel>
             <Sentinel2SavePanel />
