@@ -144,21 +144,18 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                 }),
             });
 
-            // Update or create MediaLayer
-            if (!layerRef.current) {
-                layerRef.current = new MediaLayer({
-                    source: [imageElement],
-                    opacity: 1,
-                    visible,
-                });
-                mapView.map.add(layerRef.current);
-            } else {
-                // Replace the source with new image element
-                // MediaLayer source is a Collection, but TypeScript types are incomplete
-                const sourceCollection = layerRef.current.source as any;
-                sourceCollection.removeAll();
-                sourceCollection.add(imageElement);
+            // Remove old layer if it exists
+            if (layerRef.current) {
+                mapView.map.remove(layerRef.current);
             }
+
+            // Create new MediaLayer with the image
+            layerRef.current = new MediaLayer({
+                source: [imageElement],
+                opacity: 1,
+                visible,
+            });
+            mapView.map.add(layerRef.current);
 
             console.log('CustomRendererImageOverlay: Image updated successfully');
         } catch (error: any) {
