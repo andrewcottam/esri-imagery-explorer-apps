@@ -17,6 +17,38 @@ import React, { useEffect, useRef, useState } from 'react';
 import ImageryLayer from '@arcgis/core/layers/ImageryLayer';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
 
+/**
+ * Ensures rasterFunction properties come before rasterFunctionArguments
+ * in the object tree to match Esri's expected property order
+ */
+const normalizeRasterFunctionOrder = (obj: any): any => {
+    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+        return obj;
+    }
+
+    const normalized: any = {};
+
+    // Always put rasterFunction first if it exists
+    if (obj.rasterFunction !== undefined) {
+        normalized.rasterFunction = obj.rasterFunction;
+    }
+
+    // Then add other properties (recursively normalizing nested objects)
+    for (const key in obj) {
+        if (key === 'rasterFunction') continue; // Already added
+
+        if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+            normalized[key] = normalizeRasterFunctionOrder(obj[key]);
+        } else if (Array.isArray(obj[key])) {
+            normalized[key] = obj[key].map((item: any) => normalizeRasterFunctionOrder(item));
+        } else {
+            normalized[key] = obj[key];
+        }
+    }
+
+    return normalized;
+};
+
 type Props = {
     /**
      * service url
@@ -93,13 +125,14 @@ export const useImageryLayerByObjectId = ({
             : defaultMosaicRule;
 
         // Use full raster function definition if available, otherwise just the function name
-        const rasterFunctionConfig = rasterFunctionDefinition
+        let rasterFunctionConfig = rasterFunctionDefinition
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Debug: Log the raster function config
+        // Normalize property ordering for custom renderers to ensure rasterFunction comes before rasterFunctionArguments
         if (rasterFunctionDefinition) {
-            console.log('Using custom raster function definition:');
+            rasterFunctionConfig = normalizeRasterFunctionOrder(rasterFunctionConfig);
+            console.log('Using custom raster function definition (normalized):');
             console.log('JSON stringified:', JSON.stringify(rasterFunctionConfig, null, 2));
         }
 
@@ -132,9 +165,14 @@ export const useImageryLayerByObjectId = ({
         }
 
         // Use full raster function definition if available, otherwise just the function name
-        const rasterFunctionConfig = rasterFunctionDefinition
+        let rasterFunctionConfig = rasterFunctionDefinition
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
+
+        // Normalize property ordering for custom renderers to ensure rasterFunction comes before rasterFunctionArguments
+        if (rasterFunctionDefinition) {
+            rasterFunctionConfig = normalizeRasterFunctionOrder(rasterFunctionConfig);
+        }
 
         layerRef.current.rasterFunction = rasterFunctionConfig as any;
     }, [rasterFunction, rasterFunctionDefinition]);
