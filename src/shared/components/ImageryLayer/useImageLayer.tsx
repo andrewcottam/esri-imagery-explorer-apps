@@ -19,51 +19,43 @@ import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
 import RasterFunction from '@arcgis/core/layers/support/RasterFunction';
 
 /**
- * Recursively ensures rasterFunction comes before rasterFunctionArguments
- * by using Object.defineProperties to explicitly control property order
+ * Converts a custom renderer definition to use RasterFunction constructor
+ * The RasterFunction class uses functionName/functionArguments at top level
+ * and may have better control over serialization order
  */
-const createOrderedRasterFunction = (obj: any): any => {
+const convertToRasterFunction = (obj: any): any => {
     if (!obj || typeof obj !== 'object') {
         return obj;
     }
 
     if (Array.isArray(obj)) {
-        return obj.map(item => createOrderedRasterFunction(item));
+        return obj.map(item => convertToRasterFunction(item));
     }
 
-    // Create a new object with properties defined in specific order
-    const ordered = {};
+    // If this has rasterFunction/rasterFunctionArguments at top level,
+    // convert to RasterFunction constructor format
+    if (obj.rasterFunction && obj.rasterFunctionArguments) {
+        // Recursively convert nested rasters
+        const convertedArgs: any = {};
+        Object.keys(obj.rasterFunctionArguments).forEach(key => {
+            convertedArgs[key] = convertToRasterFunction(obj.rasterFunctionArguments[key]);
+        });
 
-    // First, add rasterFunction if it exists
-    if (obj.rasterFunction !== undefined) {
-        Object.defineProperty(ordered, 'rasterFunction', {
-            value: obj.rasterFunction,
-            enumerable: true,
-            writable: true,
-            configurable: true
+        // Create with functionName/functionArguments structure
+        return new RasterFunction({
+            functionName: obj.rasterFunction,
+            functionArguments: convertedArgs,
+            ...(obj.outputPixelType && { outputPixelType: obj.outputPixelType })
         });
     }
 
-    // Then add all other properties, recursively processing nested objects
+    // For nested objects, recursively convert
+    const converted: any = {};
     Object.keys(obj).forEach(key => {
-        if (key === 'rasterFunction') return; // Already added
-
-        let value = obj[key];
-
-        // Recursively process nested objects and arrays
-        if (value && typeof value === 'object') {
-            value = createOrderedRasterFunction(value);
-        }
-
-        Object.defineProperty(ordered, key, {
-            value,
-            enumerable: true,
-            writable: true,
-            configurable: true
-        });
+        converted[key] = convertToRasterFunction(obj[key]);
     });
 
-    return ordered;
+    return converted;
 };
 
 type Props = {
@@ -146,12 +138,11 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Ensure property ordering for custom renderers
+        // Convert custom renderers to use RasterFunction class
         if (rasterFunctionDefinition) {
-            rasterFunctionConfig = createOrderedRasterFunction(rasterFunctionConfig);
-            console.log('Using custom raster function definition (ordered):');
-            console.log('Property keys:', Object.keys(rasterFunctionConfig));
-            console.log('JSON.stringify:', JSON.stringify(rasterFunctionConfig, null, 2));
+            rasterFunctionConfig = convertToRasterFunction(rasterFunctionConfig);
+            console.log('Converted to RasterFunction:', rasterFunctionConfig);
+            console.log('RasterFunction instance?', rasterFunctionConfig instanceof RasterFunction);
         }
 
         layerRef.current = new ImageryLayer({
@@ -187,9 +178,9 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Ensure property ordering for custom renderers
+        // Convert custom renderers to use RasterFunction class
         if (rasterFunctionDefinition) {
-            rasterFunctionConfig = createOrderedRasterFunction(rasterFunctionConfig);
+            rasterFunctionConfig = convertToRasterFunction(rasterFunctionConfig);
         }
 
         layerRef.current.rasterFunction = rasterFunctionConfig as any;
