@@ -47,6 +47,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
 }) => {
     const layerRef = useRef<MediaLayer>(null);
     const abortControllerRef = useRef<AbortController>(null);
+    const blobUrlRef = useRef<string>(null);
 
     /**
      * Helper to create properly ordered JSON string for rendering rule
@@ -144,7 +145,14 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             }
 
             const blob = await response.blob();
+
+            // Revoke old blob URL before creating new one to prevent memory leaks
+            if (blobUrlRef.current) {
+                URL.revokeObjectURL(blobUrlRef.current);
+            }
+
             const imageUrl = URL.createObjectURL(blob);
+            blobUrlRef.current = imageUrl;
 
             // Create image element for MediaLayer
             const imageElement = new ImageElement({
@@ -244,6 +252,11 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             }
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
+            }
+            // Revoke blob URL to free up memory
+            if (blobUrlRef.current) {
+                URL.revokeObjectURL(blobUrlRef.current);
+                blobUrlRef.current = null;
             }
         };
     }, []);
