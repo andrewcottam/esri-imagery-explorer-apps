@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import MapView from '@arcgis/core/views/MapView';
 import MediaLayer from '@arcgis/core/layers/MediaLayer';
 import ExtentAndRotationGeoreference from '@arcgis/core/layers/support/ExtentAndRotationGeoreference';
@@ -84,7 +84,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
     /**
      * Fetch image directly from ImageServer with properly ordered rendering rule
      */
-    const fetchImage = async () => {
+    const fetchImage = useCallback(async () => {
         if (!mapView || !mosaicRule) {
             console.log('CustomRendererImageOverlay: Skip fetch - missing mapView or mosaicRule');
             return;
@@ -165,7 +165,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                 console.error('CustomRendererImageOverlay: Error fetching image:', error);
             }
         }
-    };
+    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible]);
 
     // Fetch image when extent changes or rendering rule changes
     useEffect(() => {
@@ -181,7 +181,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
         return () => {
             handle.remove();
         };
-    }, [mapView, rasterFunctionDefinition, mosaicRule, visible]);
+    }, [mapView, visible, fetchImage]);
 
     // Update visibility
     useEffect(() => {
