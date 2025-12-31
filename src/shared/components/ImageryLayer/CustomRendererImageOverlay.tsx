@@ -169,11 +169,28 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
 
             console.log('CustomRendererImageOverlay: Image updated successfully');
 
-            // Wait for layer view to be created before marking as finished loading
-            // This ensures mapView.updating stays true during layer view creation
+            // Wait for layer view to be created AND for mapView to finish updating
+            // This ensures we don't mark loading as complete too early
             try {
                 await mapView.whenLayerView(layerRef.current);
                 console.log('CustomRendererImageOverlay: Layer view created');
+
+                // Wait for mapView to finish updating before marking as complete
+                // This prevents the spinner from flickering
+                await new Promise<void>((resolve) => {
+                    if (!mapView.updating) {
+                        resolve();
+                        return;
+                    }
+
+                    const handle = mapView.watch('updating', (updating) => {
+                        if (!updating) {
+                            handle.remove();
+                            resolve();
+                        }
+                    });
+                });
+                console.log('CustomRendererImageOverlay: MapView finished updating');
             } catch (err) {
                 console.warn('CustomRendererImageOverlay: Layer view creation warning:', err);
             }
