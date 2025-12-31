@@ -16,47 +16,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ImageryLayer from '@arcgis/core/layers/ImageryLayer';
 import MosaicRule from '@arcgis/core/layers/support/MosaicRule';
-import RasterFunction from '@arcgis/core/layers/support/RasterFunction';
-
-/**
- * Converts a custom renderer definition to use RasterFunction constructor
- * The RasterFunction class uses functionName/functionArguments at top level
- * and may have better control over serialization order
- */
-const convertToRasterFunction = (obj: any): any => {
-    if (!obj || typeof obj !== 'object') {
-        return obj;
-    }
-
-    if (Array.isArray(obj)) {
-        return obj.map(item => convertToRasterFunction(item));
-    }
-
-    // If this has rasterFunction/rasterFunctionArguments at top level,
-    // convert to RasterFunction constructor format
-    if (obj.rasterFunction && obj.rasterFunctionArguments) {
-        // Recursively convert nested rasters
-        const convertedArgs: any = {};
-        Object.keys(obj.rasterFunctionArguments).forEach(key => {
-            convertedArgs[key] = convertToRasterFunction(obj.rasterFunctionArguments[key]);
-        });
-
-        // Create with functionName/functionArguments structure
-        return new RasterFunction({
-            functionName: obj.rasterFunction,
-            functionArguments: convertedArgs,
-            ...(obj.outputPixelType && { outputPixelType: obj.outputPixelType })
-        });
-    }
-
-    // For nested objects, recursively convert
-    const converted: any = {};
-    Object.keys(obj).forEach(key => {
-        converted[key] = convertToRasterFunction(obj[key]);
-    });
-
-    return converted;
-};
 
 type Props = {
     /**
@@ -126,6 +85,42 @@ export const useImageryLayerByObjectId = ({
     const [layer, setLayer] = useState<ImageryLayer>();
 
     /**
+     * Helper to create properly ordered JSON string for rendering rule
+     */
+    const createOrderedRenderingRuleString = (obj: any): string => {
+        if (!obj || typeof obj !== 'object') {
+            return JSON.stringify(obj);
+        }
+
+        if (Array.isArray(obj)) {
+            return '[' + obj.map(item => createOrderedRenderingRuleString(item)).join(',') + ']';
+        }
+
+        const parts: string[] = [];
+
+        // Add rasterFunction first if it exists
+        if (obj.rasterFunction !== undefined) {
+            parts.push(`"rasterFunction":"${obj.rasterFunction}"`);
+        }
+
+        // Add all other properties
+        Object.keys(obj).forEach(key => {
+            if (key === 'rasterFunction') return; // Already added
+
+            const value = obj[key];
+            if (typeof value === 'object') {
+                parts.push(`"${key}":${createOrderedRenderingRuleString(value)}`);
+            } else if (typeof value === 'string') {
+                parts.push(`"${key}":"${value}"`);
+            } else {
+                parts.push(`"${key}":${JSON.stringify(value)}`);
+            }
+        });
+
+        return '{' + parts.join(',') + '}';
+    };
+
+    /**
      * initialize imagery layer using mosaic created using the input year
      */
     const init = async () => {
@@ -138,20 +133,27 @@ export const useImageryLayerByObjectId = ({
             ? rasterFunctionDefinition
             : { functionName: rasterFunction };
 
-        // Convert custom renderers to use RasterFunction class
+        let customParameters: any = undefined;
+
         if (rasterFunctionDefinition) {
-            rasterFunctionConfig = convertToRasterFunction(rasterFunctionConfig);
-            console.log('Converted to RasterFunction:', rasterFunctionConfig);
-            console.log('RasterFunction instance?', rasterFunctionConfig instanceof RasterFunction);
+            // Create properly ordered JSON string
+            const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
+            console.log('Rendering rule string (ordered):', renderingRuleString);
+
+            // Try using customParameters to append renderingRule to all requests
+            customParameters = {
+                renderingRule: renderingRuleString
+            };
+
+            console.log('Using customParameters:', customParameters);
         }
 
         layerRef.current = new ImageryLayer({
-            // URL to the imagery service
             url,
             mosaicRule,
             rasterFunction: rasterFunctionConfig,
+            ...(customParameters && { customParameters }),
             visible,
-            // blendMode: 'multiply'
         });
 
         setLayer(layerRef.current);
