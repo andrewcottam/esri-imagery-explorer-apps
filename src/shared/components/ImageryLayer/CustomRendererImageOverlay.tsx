@@ -145,8 +145,11 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                 });
                 mapView.map.add(layerRef.current);
             } else {
-                layerRef.current.source.removeAll();
-                layerRef.current.source.add(imageElement);
+                // Replace the source with new image element
+                // MediaLayer source is a Collection, but TypeScript types are incomplete
+                const sourceCollection = layerRef.current.source as any;
+                sourceCollection.removeAll();
+                sourceCollection.add(imageElement);
             }
 
             console.log('CustomRendererImageOverlay: Image updated successfully');
