@@ -152,6 +152,12 @@ const ImageryLayerByObjectID: FC<Props> = ({
             groupLayer.add(layer);
             groupLayer.reorder(layer, 0);
         }
+
+        // Explicitly hide regular layer when using custom overlay
+        if (layer && useCustomOverlay) {
+            console.log('ImageryLayerByObjectID: Hiding regular layer for custom overlay');
+            layer.visible = false;
+        }
     }, [groupLayer, layer, useCustomOverlay]);
 
     // Capture screenshot for custom renderer after layer renders
@@ -193,14 +199,14 @@ const ImageryLayerByObjectID: FC<Props> = ({
         const handleLayerUpdate = async () => {
             try {
                 if (useCustomOverlay) {
-                    console.log('ImageryLayerByObjectID: Custom renderer ready for screenshot');
-                    // CustomRendererImageOverlay already waited for:
-                    // 1. Image to load from blob
-                    // 2. MediaLayer to be created and added
-                    // 3. Layer view to be created
-                    // 4. MapView to stop updating
-                    // 5. 2 second delay for painting
-                    // So we can capture immediately
+                    console.log('ImageryLayerByObjectID: Custom renderer loading finished, adding final delay...');
+
+                    // Even though CustomRendererImageOverlay waited for everything,
+                    // we need one more delay to ensure the MediaLayer is actually
+                    // painted on screen and the old layer is fully removed
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+                    console.log('ImageryLayerByObjectID: Final delay complete, ready for screenshot');
                 } else {
                     console.log('ImageryLayerByObjectID: Waiting for layer to load...');
                     // Wait for layer to be loaded and stop updating
