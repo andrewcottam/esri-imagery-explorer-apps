@@ -325,3 +325,94 @@ export const swapMainAndSecondaryScenes =
             console.error(err);
         }
     };
+
+/**
+ * Populate rasterFunctionDefinition for all scenes that have custom renderer names
+ * This is called after custom renderers are loaded from Firestore
+ */
+export const populateCustomRendererDefinitions =
+    (customRenderers: any[]) =>
+    (dispatch: StoreDispatch, getState: StoreGetState) => {
+        try {
+            const mainScene = selectQueryParams4MainScene(getState());
+            const secondaryScene = selectQueryParams4SecondaryScene(getState());
+            const listOfScenes = selectListOfQueryParams(getState());
+
+            // Helper to check if a renderer name is custom and update the scene
+            const updateSceneWithCustomRenderer = (
+                scene: QueryParams4ImageryScene
+            ): QueryParams4ImageryScene | null => {
+                if (
+                    !scene ||
+                    !scene.rasterFunctionName ||
+                    !scene.rasterFunctionName.startsWith('custom-')
+                ) {
+                    return null; // Not a custom renderer
+                }
+
+                // Extract renderer ID from "custom-{id}"
+                const rendererId = scene.rasterFunctionName.replace(
+                    'custom-',
+                    ''
+                );
+
+                // Find the renderer definition
+                const renderer = customRenderers.find((r) => r.id === rendererId);
+
+                if (!renderer || !renderer.renderer) {
+                    console.warn(
+                        `Custom renderer not found for ID: ${rendererId}`
+                    );
+                    return null;
+                }
+
+                // Return updated scene with definition
+                return {
+                    ...scene,
+                    rasterFunctionDefinition: renderer.renderer,
+                };
+            };
+
+            // Update main scene if it has a custom renderer
+            if (mainScene) {
+                const updated = updateSceneWithCustomRenderer(mainScene);
+                if (updated) {
+                    dispatch(queryParams4MainSceneChanged(updated));
+                }
+            }
+
+            // Update secondary scene if it has a custom renderer
+            if (secondaryScene) {
+                const updated = updateSceneWithCustomRenderer(secondaryScene);
+                if (updated) {
+                    dispatch(queryParams4SecondarySceneChanged(updated));
+                }
+            }
+
+            // Update list of scenes if any have custom renderers
+            if (listOfScenes && listOfScenes.length > 0) {
+                let hasUpdates = false;
+                const updatedList = listOfScenes.map((scene) => {
+                    const updated = updateSceneWithCustomRenderer(scene);
+                    if (updated) {
+                        hasUpdates = true;
+                        return updated;
+                    }
+                    return scene;
+                });
+
+                if (hasUpdates) {
+                    const selectedId =
+                        selectIdOfSelectedItemInListOfQueryParams(getState());
+                    dispatch(
+                        queryParamsListChanged({
+                            queryParams: updatedList,
+                            selectedItemID: selectedId,
+                        })
+                    );
+                }
+            }
+        } catch (err) {
+            console.error('Error populating custom renderer definitions:', err);
+        }
+    };

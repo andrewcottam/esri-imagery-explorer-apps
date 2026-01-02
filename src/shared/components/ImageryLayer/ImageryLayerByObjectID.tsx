@@ -37,6 +37,7 @@ import { selectFirebaseUser } from '@shared/store/Firebase/selectors';
 import { captureMapScreenshot } from '@shared/utils/captureMapScreenshot';
 import { updateRendererImage } from '@shared/services/firebase/firestore';
 import { customRendererLoadingChanged } from '@shared/store/UI/reducer';
+import { selectIsCustomRendererLoading } from '@shared/store/UI/selectors';
 
 type Props = {
     serviceUrl: string;
@@ -78,6 +79,8 @@ const ImageryLayerByObjectID: FC<Props> = ({
     );
 
     const firebaseUser = useAppSelector(selectFirebaseUser);
+
+    const isCustomRendererLoading = useAppSelector(selectIsCustomRendererLoading);
 
     // Memoize visibility to prevent unnecessary re-renders
     const visibility = useMemo(() => {
@@ -134,6 +137,31 @@ const ImageryLayerByObjectID: FC<Props> = ({
         dispatch(customRendererLoadingChanged(isLoading));
     }, [dispatch]);
 
+    // Memoize screenshot capture callback for custom renderer
+    const handleCaptureScreenshot = useCallback(async () => {
+        if (!mapView || !pendingScreenshotRendererId || !firebaseUser) {
+            console.log('ImageryLayerByObjectID: Screenshot capture skipped - missing requirements');
+            return;
+        }
+
+        console.log('ImageryLayerByObjectID: Capturing screenshot...');
+        const image = await captureMapScreenshot(mapView);
+        console.log('ImageryLayerByObjectID: Screenshot captured, size:', image.length);
+
+        // Update renderer in Firestore
+        console.log('ImageryLayerByObjectID: Updating renderer image in Firestore:', pendingScreenshotRendererId);
+        await updateRendererImage(pendingScreenshotRendererId, image, firebaseUser.uid);
+        console.log('ImageryLayerByObjectID: Firestore updated successfully');
+
+        // Update Redux state with the new image
+        dispatch(customRendererImageUpdated({ rendererId: pendingScreenshotRendererId, image }));
+        console.log('ImageryLayerByObjectID: Redux state updated');
+
+        // Clear pending screenshot renderer ID
+        dispatch(pendingScreenshotRendererIdSet(null));
+        console.log('ImageryLayerByObjectID: Renderer screenshot captured and saved');
+    }, [mapView, pendingScreenshotRendererId, firebaseUser, dispatch]);
+
     // Always call the hook (React rules), but conditionally use the result
     const layer = useImageryLayerByObjectId({
         url: serviceUrl,
@@ -149,40 +177,35 @@ const ImageryLayerByObjectID: FC<Props> = ({
             groupLayer.add(layer);
             groupLayer.reorder(layer, 0);
         }
+
+        // Explicitly hide regular layer when using custom overlay
+        if (layer && useCustomOverlay) {
+            console.log('ImageryLayerByObjectID: Hiding regular layer for custom overlay');
+            layer.visible = false;
+        }
     }, [groupLayer, layer, useCustomOverlay]);
 
-    // Capture screenshot for custom renderer after layer renders
+    // Capture screenshot for regular (non-custom) renderers after layer renders
+    // Custom renderers handle their own screenshot capture in CustomRendererImageOverlay
     useEffect(() => {
-        if (
-            !pendingScreenshotRendererId ||
-            !layer ||
-            !mapView ||
-            !firebaseUser
-        ) {
-            console.log('ImageryLayerByObjectID: Screenshot capture skipped:', {
-                hasPendingId: !!pendingScreenshotRendererId,
-                hasLayer: !!layer,
-                hasMapView: !!mapView,
-                hasUser: !!firebaseUser,
-            });
+        // Skip if using custom overlay (it handles its own screenshots)
+        if (useCustomOverlay) {
             return;
         }
 
-        console.log(
-            'ImageryLayerByObjectID: Starting screenshot capture for renderer:',
-            pendingScreenshotRendererId
-        );
+        if (!pendingScreenshotRendererId || !mapView || !firebaseUser || !layer) {
+            return;
+        }
 
-        // Wait for layer to finish rendering
+        console.log('ImageryLayerByObjectID: Starting screenshot capture for regular renderer:', pendingScreenshotRendererId);
+
         const handleLayerUpdate = async () => {
             try {
                 console.log('ImageryLayerByObjectID: Waiting for layer to load...');
-                // Wait for layer to be loaded and stop updating
                 await layer.when();
                 console.log('ImageryLayerByObjectID: Layer loaded');
 
                 console.log('ImageryLayerByObjectID: Waiting for map view...');
-                // Wait a bit longer for the view to finish rendering
                 await mapView.when();
                 console.log('ImageryLayerByObjectID: Map view ready');
 
@@ -196,24 +219,12 @@ const ImageryLayerByObjectID: FC<Props> = ({
                 console.log('ImageryLayerByObjectID: Screenshot captured, size:', image.length);
 
                 // Update renderer in Firestore
-                console.log(
-                    'ImageryLayerByObjectID: Updating renderer image in Firestore:',
-                    pendingScreenshotRendererId
-                );
-                await updateRendererImage(
-                    pendingScreenshotRendererId,
-                    image,
-                    firebaseUser.uid
-                );
+                console.log('ImageryLayerByObjectID: Updating renderer image in Firestore:', pendingScreenshotRendererId);
+                await updateRendererImage(pendingScreenshotRendererId, image, firebaseUser.uid);
                 console.log('ImageryLayerByObjectID: Firestore updated successfully');
 
                 // Update Redux state with the new image
-                dispatch(
-                    customRendererImageUpdated({
-                        rendererId: pendingScreenshotRendererId,
-                        image,
-                    })
-                );
+                dispatch(customRendererImageUpdated({ rendererId: pendingScreenshotRendererId, image }));
                 console.log('ImageryLayerByObjectID: Redux state updated');
 
                 console.log('ImageryLayerByObjectID: Renderer screenshot captured and saved');
@@ -222,13 +233,12 @@ const ImageryLayerByObjectID: FC<Props> = ({
                 dispatch(pendingScreenshotRendererIdSet(null));
             } catch (error) {
                 console.error('Failed to capture renderer screenshot:', error);
-                // Still clear the pending ID to avoid infinite retries
                 dispatch(pendingScreenshotRendererIdSet(null));
             }
         };
 
         handleLayerUpdate();
-    }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch]);
+    }, [pendingScreenshotRendererId, layer, mapView, firebaseUser, dispatch, useCustomOverlay]);
 
     // Memoize mosaic rule to prevent infinite re-renders
     const mosaicRuleForCustomOverlay = useMemo(() => {
@@ -245,6 +255,9 @@ const ImageryLayerByObjectID: FC<Props> = ({
                 mosaicRule={mosaicRuleForCustomOverlay}
                 visible={visibility}
                 onLoadingChange={handleLoadingChange}
+                pendingScreenshotRendererId={pendingScreenshotRendererId}
+                firebaseUser={firebaseUser}
+                onCaptureScreenshot={handleCaptureScreenshot}
             />
         );
     }

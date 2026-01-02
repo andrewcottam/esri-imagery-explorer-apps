@@ -22,6 +22,7 @@ import {
     customRenderersCleared,
 } from '@shared/store/Renderers/reducer';
 import { fetchUserRenderers } from '@shared/services/firebase/firestore';
+import { populateCustomRendererDefinitions } from '@shared/store/ImageryScene/thunks';
 
 /**
  * Hook that automatically fetches custom renderers from Firestore when user logs in
@@ -43,6 +44,10 @@ export const useFetchCustomRenderers = () => {
                 dispatch(customRenderersLoadingStarted());
                 const renderers = await fetchUserRenderers(user.uid);
                 dispatch(customRenderersLoaded(renderers));
+
+                // After loading custom renderers, populate definitions in any scenes
+                // that have custom renderer names but no definitions (e.g., loaded from URL)
+                dispatch(populateCustomRendererDefinitions(renderers));
             } catch (error) {
                 console.error('Error loading custom renderers:', error);
                 // Clear on error

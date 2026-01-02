@@ -30,6 +30,18 @@ type Props = {
      * Callback when loading state changes (for loading spinner integration)
      */
     onLoadingChange?: (isLoading: boolean) => void;
+    /**
+     * ID of renderer that needs a screenshot captured after loading
+     */
+    pendingScreenshotRendererId?: string;
+    /**
+     * Firebase user for storing screenshot
+     */
+    firebaseUser?: { uid: string };
+    /**
+     * Callback to capture and save screenshot
+     */
+    onCaptureScreenshot?: () => Promise<void>;
 };
 
 /**
@@ -44,10 +56,14 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
     mosaicRule,
     visible,
     onLoadingChange,
+    pendingScreenshotRendererId,
+    firebaseUser,
+    onCaptureScreenshot,
 }) => {
     const layerRef = useRef<MediaLayer>(null);
     const abortControllerRef = useRef<AbortController>(null);
-    const blobUrlRef = useRef<string>(null);
+    // Track all blob URLs created (for animation mode which references old URLs)
+    const blobUrlsRef = useRef<string[]>([]);
 
     /**
      * Helper to create properly ordered JSON string for rendering rule
@@ -146,13 +162,26 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
 
             const blob = await response.blob();
 
-            // Revoke old blob URL before creating new one to prevent memory leaks
-            if (blobUrlRef.current) {
-                URL.revokeObjectURL(blobUrlRef.current);
-            }
-
+            // Create new blob URL and track it
+            // Note: We don't revoke old blob URLs here because the animation system
+            // may still be referencing them. All blob URLs will be revoked on unmount.
             const imageUrl = URL.createObjectURL(blob);
-            blobUrlRef.current = imageUrl;
+            blobUrlsRef.current.push(imageUrl);
+
+            // Wait for the actual image to load from the blob URL
+            console.log('CustomRendererImageOverlay: Waiting for image to load from blob URL...');
+            await new Promise<void>((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    console.log('CustomRendererImageOverlay: Image loaded from blob URL');
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.error('CustomRendererImageOverlay: Failed to load image from blob URL');
+                    reject(new Error('Failed to load image'));
+                };
+                img.src = imageUrl;
+            });
 
             // Create image element for MediaLayer
             const imageElement = new ImageElement({
@@ -175,51 +204,69 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             });
             mapView.map.add(layerRef.current);
 
-            console.log('CustomRendererImageOverlay: Image updated successfully');
+            console.log('CustomRendererImageOverlay: MediaLayer created and added to map');
 
-            // Wait for layer view to be created AND for mapView to finish updating
-            // This ensures we don't mark loading as complete too early
+            // Wait for layer view to be created AND for the LayerView itself to finish updating
             try {
-                await mapView.whenLayerView(layerRef.current);
-                console.log('CustomRendererImageOverlay: Layer view created');
+                const layerView = await mapView.whenLayerView(layerRef.current);
+                console.log('CustomRendererImageOverlay: Layer view created, waiting for it to finish updating...');
 
-                // Wait for mapView to finish updating before marking as complete
-                // This prevents the spinner from flickering
+                // Wait for the LayerView (not mapView) to stop updating
                 await new Promise<void>((resolve) => {
-                    if (!mapView.updating) {
+                    if (!layerView.updating) {
+                        console.log('CustomRendererImageOverlay: LayerView already finished updating');
                         resolve();
                         return;
                     }
 
-                    const handle = mapView.watch('updating', (updating) => {
+                    const handle = layerView.watch('updating', (updating) => {
+                        console.log('CustomRendererImageOverlay: LayerView updating:', updating);
                         if (!updating) {
+                            console.log('CustomRendererImageOverlay: LayerView finished updating');
                             handle.remove();
                             resolve();
                         }
                     });
                 });
-                console.log('CustomRendererImageOverlay: MapView finished updating');
+
+                // Additional small delay for final painting
+                console.log('CustomRendererImageOverlay: Waiting 500ms for final paint...');
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                console.log('CustomRendererImageOverlay: Ready for screenshot');
             } catch (err) {
                 console.warn('CustomRendererImageOverlay: Layer view creation warning:', err);
             }
 
             // Notify that loading has finished
             if (onLoadingChange) {
-                onLoadingChange(false);
-            }
-        } catch (error: any) {
-            // Notify that loading has finished (even on error)
-            if (onLoadingChange) {
+                console.log('CustomRendererImageOverlay: Calling onLoadingChange(false) - ready for screenshot');
                 onLoadingChange(false);
             }
 
+            // Capture screenshot if needed
+            if (pendingScreenshotRendererId && firebaseUser && onCaptureScreenshot) {
+                console.log('CustomRendererImageOverlay: Capturing screenshot for renderer:', pendingScreenshotRendererId);
+                try {
+                    await onCaptureScreenshot();
+                    console.log('CustomRendererImageOverlay: Screenshot captured and saved successfully');
+                } catch (error) {
+                    console.error('CustomRendererImageOverlay: Failed to capture screenshot:', error);
+                }
+            }
+        } catch (error: any) {
             if (error.name === 'AbortError') {
+                // Request was aborted - don't call onLoadingChange(false) because
+                // a new request has already started and called onLoadingChange(true)
                 console.log('CustomRendererImageOverlay: Request aborted');
             } else {
+                // Real error - notify that loading has finished
                 console.error('CustomRendererImageOverlay: Error fetching image:', error);
+                if (onLoadingChange) {
+                    onLoadingChange(false);
+                }
             }
         }
-    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible, onLoadingChange]);
+    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible, onLoadingChange, pendingScreenshotRendererId, firebaseUser, onCaptureScreenshot]);
 
     // Fetch image when extent changes or rendering rule changes
     useEffect(() => {
@@ -253,11 +300,9 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
-            // Revoke blob URL to free up memory
-            if (blobUrlRef.current) {
-                URL.revokeObjectURL(blobUrlRef.current);
-                blobUrlRef.current = null;
-            }
+            // Revoke all blob URLs to free up memory
+            blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+            blobUrlsRef.current = [];
         };
     }, []);
 
