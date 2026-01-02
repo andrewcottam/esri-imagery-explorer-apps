@@ -22,7 +22,7 @@ import { QueryParams4ImageryScene } from '@shared/store/ImageryScene/reducer';
 // import { exportImage as exportLandsatImage } from '@shared/services/landsat-level-2/exportImage';
 import { getAnimationWindowInfoFromHashParams } from '@shared/utils/url-hash-params';
 import { getNormalizedExtent } from '@shared/utils/snippets/getNormalizedExtent';
-import { exportImage } from '@shared/services/helpers/exportImage';
+import { exportImage, exportImageWithCustomRenderer } from '@shared/services/helpers/exportImage';
 
 type Props = {
     /**
@@ -91,15 +91,33 @@ const useMediaLayerImageElement = ({
                     (queryParam) => queryParam.objectIdOfSelectedScene !== null
                 )
                 .map((queryParam) => {
-                    return exportImage({
-                        serviceUrl: imageryServiceUrl,
-                        extent,
-                        width,
-                        height,
-                        objectId: queryParam.objectIdOfSelectedScene,
-                        rasterFunctionName: queryParam.rasterFunctionName,
-                        abortController: abortControllerRef.current,
-                    });
+                    // Check if this is a custom renderer
+                    const hasCustomRenderer = queryParam.rasterFunctionDefinition !== undefined &&
+                                             queryParam.rasterFunctionDefinition !== null;
+
+                    if (hasCustomRenderer) {
+                        // For custom renderers, use the full rasterFunctionDefinition
+                        return exportImageWithCustomRenderer({
+                            serviceUrl: imageryServiceUrl,
+                            extent,
+                            width,
+                            height,
+                            objectId: queryParam.objectIdOfSelectedScene,
+                            rasterFunctionDefinition: queryParam.rasterFunctionDefinition,
+                            abortController: abortControllerRef.current,
+                        });
+                    } else {
+                        // For regular renderers, use the rasterFunctionName
+                        return exportImage({
+                            serviceUrl: imageryServiceUrl,
+                            extent,
+                            width,
+                            height,
+                            objectId: queryParam.objectIdOfSelectedScene,
+                            rasterFunctionName: queryParam.rasterFunctionName,
+                            abortController: abortControllerRef.current,
+                        });
+                    }
                 });
 
             const responses = await Promise.all(requests);
