@@ -217,6 +217,15 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                 onChange={(rasterFunctionName, rasterFunctionInfo) => {
                     console.log('Renderer selected:', rasterFunctionName);
 
+                    // If there are composite scenes selected, show the composite layer
+                    // This ensures the layer is visible when selecting any renderer in composite mode
+                    if (compositeSceneIds && compositeSceneIds.length >= 2) {
+                        console.log(
+                            'Composite scenes selected, automatically showing composite layer'
+                        );
+                        dispatch(showCompositeLayerChanged(true));
+                    }
+
                     // Check if this is a custom renderer without an image
                     if (rasterFunctionName.startsWith('custom-')) {
                         console.log('Custom renderer detected');
@@ -238,18 +247,6 @@ export const RasterFunctionSelectorContainer: FC<Props> = ({
                                 'Renderer has no image, marking for screenshot capture:',
                                 customRenderer.id
                             );
-
-                            // If on temporal composite tab, ensure the composite layer is shown
-                            if (
-                                isTemporalCompositeLayerOn &&
-                                compositeSceneIds &&
-                                compositeSceneIds.length >= 2
-                            ) {
-                                console.log(
-                                    'Automatically showing composite layer for screenshot'
-                                );
-                                dispatch(showCompositeLayerChanged(true));
-                            }
 
                             dispatch(
                                 pendingScreenshotRendererIdSet(customRenderer.id)
