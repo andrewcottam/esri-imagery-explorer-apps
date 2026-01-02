@@ -114,6 +114,77 @@ export const exportImage = async ({
     return blob;
 };
 
+type ExportCompositeImageWithCustomRendererParams = {
+    /**
+     * imagery service URL
+     */
+    serviceUrl: string;
+    /**
+     * Map Extent
+     */
+    extent: Pick<IExtent, 'xmin' | 'ymin' | 'xmax' | 'ymax'>;
+    /**
+     * width of map container
+     */
+    width: number;
+    /**
+     * height of map container
+     */
+    height: number;
+    /**
+     * Full raster function definition (for custom renderers)
+     */
+    rasterFunctionDefinition: object;
+    /**
+     * object IDs of the imagery scenes to composite
+     */
+    objectIds: number[];
+    /**
+     * Composite method (maps to ArcGIS mosaic operations)
+     */
+    method: 'first' | 'last' | 'min' | 'max' | 'mean' | 'blend' | 'sum';
+    abortController: AbortController;
+};
+
+/**
+ * Export composite image with custom renderer definition
+ * Uses properly ordered JSON to maintain rasterFunction property order required by Esri ImageServer
+ */
+export const exportCompositeImageWithCustomRenderer = async ({
+    serviceUrl,
+    extent,
+    width,
+    height,
+    rasterFunctionDefinition,
+    objectIds,
+    method,
+    abortController,
+}: ExportCompositeImageWithCustomRendererParams) => {
+    const { xmin, xmax, ymin, ymax } = extent;
+
+    // Create properly ordered rendering rule string
+    const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
+
+    const params = new URLSearchParams({
+        f: 'image',
+        bbox: `${xmin},${ymin},${xmax},${ymax}`,
+        bboxSR: '102100',
+        imageSR: '102100',
+        format: 'png',
+        size: `${width},${height}`,
+        mosaicRule: JSON.stringify(getCompositeMosaicRule(objectIds, method)),
+        renderingRule: renderingRuleString,
+    });
+
+    const requestURL = `${serviceUrl}/exportImage?${params.toString()}`;
+
+    const res = await fetch(requestURL, { signal: abortController.signal });
+
+    const blob = await res.blob();
+
+    return blob;
+};
+
 type ExportCompositeImageParams = {
     /**
      * imagery service URL
@@ -190,6 +261,77 @@ export const exportCompositeImage = async ({
     return blob;
 };
 
+type ExportCompositeImageWithCustomRendererParams = {
+    /**
+     * imagery service URL
+     */
+    serviceUrl: string;
+    /**
+     * Map Extent
+     */
+    extent: Pick<IExtent, 'xmin' | 'ymin' | 'xmax' | 'ymax'>;
+    /**
+     * width of map container
+     */
+    width: number;
+    /**
+     * height of map container
+     */
+    height: number;
+    /**
+     * Full raster function definition (for custom renderers)
+     */
+    rasterFunctionDefinition: object;
+    /**
+     * object IDs of the imagery scenes to composite
+     */
+    objectIds: number[];
+    /**
+     * Composite method (maps to ArcGIS mosaic operations)
+     */
+    method: 'first' | 'last' | 'min' | 'max' | 'mean' | 'blend' | 'sum';
+    abortController: AbortController;
+};
+
+/**
+ * Export composite image with custom renderer definition
+ * Uses properly ordered JSON to maintain rasterFunction property order required by Esri ImageServer
+ */
+export const exportCompositeImageWithCustomRenderer = async ({
+    serviceUrl,
+    extent,
+    width,
+    height,
+    rasterFunctionDefinition,
+    objectIds,
+    method,
+    abortController,
+}: ExportCompositeImageWithCustomRendererParams) => {
+    const { xmin, xmax, ymin, ymax } = extent;
+
+    // Create properly ordered rendering rule string
+    const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
+
+    const params = new URLSearchParams({
+        f: 'image',
+        bbox: `${xmin},${ymin},${xmax},${ymax}`,
+        bboxSR: '102100',
+        imageSR: '102100',
+        format: 'png',
+        size: `${width},${height}`,
+        mosaicRule: JSON.stringify(getCompositeMosaicRule(objectIds, method)),
+        renderingRule: renderingRuleString,
+    });
+
+    const requestURL = `${serviceUrl}/exportImage?${params.toString()}`;
+
+    const res = await fetch(requestURL, { signal: abortController.signal });
+
+    const blob = await res.blob();
+
+    return blob;
+};
+
 type ExportImageWithCustomRendererParams = {
     /**
      * imagery service URL
@@ -244,6 +386,77 @@ export const exportImageWithCustomRenderer = async ({
         format: 'png',
         size: `${width},${height}`,
         mosaicRule: JSON.stringify(getLockRasterMosaicRule([objectId])),
+        renderingRule: renderingRuleString,
+    });
+
+    const requestURL = `${serviceUrl}/exportImage?${params.toString()}`;
+
+    const res = await fetch(requestURL, { signal: abortController.signal });
+
+    const blob = await res.blob();
+
+    return blob;
+};
+
+type ExportCompositeImageWithCustomRendererParams = {
+    /**
+     * imagery service URL
+     */
+    serviceUrl: string;
+    /**
+     * Map Extent
+     */
+    extent: Pick<IExtent, 'xmin' | 'ymin' | 'xmax' | 'ymax'>;
+    /**
+     * width of map container
+     */
+    width: number;
+    /**
+     * height of map container
+     */
+    height: number;
+    /**
+     * Full raster function definition (for custom renderers)
+     */
+    rasterFunctionDefinition: object;
+    /**
+     * object IDs of the imagery scenes to composite
+     */
+    objectIds: number[];
+    /**
+     * Composite method (maps to ArcGIS mosaic operations)
+     */
+    method: 'first' | 'last' | 'min' | 'max' | 'mean' | 'blend' | 'sum';
+    abortController: AbortController;
+};
+
+/**
+ * Export composite image with custom renderer definition
+ * Uses properly ordered JSON to maintain rasterFunction property order required by Esri ImageServer
+ */
+export const exportCompositeImageWithCustomRenderer = async ({
+    serviceUrl,
+    extent,
+    width,
+    height,
+    rasterFunctionDefinition,
+    objectIds,
+    method,
+    abortController,
+}: ExportCompositeImageWithCustomRendererParams) => {
+    const { xmin, xmax, ymin, ymax } = extent;
+
+    // Create properly ordered rendering rule string
+    const renderingRuleString = createOrderedRenderingRuleString(rasterFunctionDefinition);
+
+    const params = new URLSearchParams({
+        f: 'image',
+        bbox: `${xmin},${ymin},${xmax},${ymax}`,
+        bboxSR: '102100',
+        imageSR: '102100',
+        format: 'png',
+        size: `${width},${height}`,
+        mosaicRule: JSON.stringify(getCompositeMosaicRule(objectIds, method)),
         renderingRule: renderingRuleString,
     });
 
