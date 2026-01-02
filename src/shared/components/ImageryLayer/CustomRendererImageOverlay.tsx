@@ -154,6 +154,21 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             const imageUrl = URL.createObjectURL(blob);
             blobUrlRef.current = imageUrl;
 
+            // Wait for the actual image to load from the blob URL
+            console.log('CustomRendererImageOverlay: Waiting for image to load from blob URL...');
+            await new Promise<void>((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    console.log('CustomRendererImageOverlay: Image loaded from blob URL');
+                    resolve();
+                };
+                img.onerror = () => {
+                    console.error('CustomRendererImageOverlay: Failed to load image from blob URL');
+                    reject(new Error('Failed to load image'));
+                };
+                img.src = imageUrl;
+            });
+
             // Create image element for MediaLayer
             const imageElement = new ImageElement({
                 image: imageUrl,
@@ -175,7 +190,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
             });
             mapView.map.add(layerRef.current);
 
-            console.log('CustomRendererImageOverlay: Image updated successfully');
+            console.log('CustomRendererImageOverlay: MediaLayer created and added to map');
 
             // Wait for layer view to be created AND for mapView to finish updating
             // This ensures we don't mark loading as complete too early
@@ -199,12 +214,18 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                     });
                 });
                 console.log('CustomRendererImageOverlay: MapView finished updating');
+
+                // Additional delay to ensure pixels are actually painted to the canvas
+                console.log('CustomRendererImageOverlay: Waiting 2 more seconds for pixels to paint...');
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                console.log('CustomRendererImageOverlay: Pixels should be painted now');
             } catch (err) {
                 console.warn('CustomRendererImageOverlay: Layer view creation warning:', err);
             }
 
             // Notify that loading has finished
             if (onLoadingChange) {
+                console.log('CustomRendererImageOverlay: Calling onLoadingChange(false) - ready for screenshot');
                 onLoadingChange(false);
             }
         } catch (error: any) {

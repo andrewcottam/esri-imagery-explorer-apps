@@ -193,24 +193,14 @@ const ImageryLayerByObjectID: FC<Props> = ({
         const handleLayerUpdate = async () => {
             try {
                 if (useCustomOverlay) {
-                    console.log('ImageryLayerByObjectID: Custom renderer ready, waiting for browser to paint...');
-
-                    // Use requestAnimationFrame to ensure browser has painted the MediaLayer
-                    // Double RAF ensures we're past the paint phase
-                    await new Promise<void>((resolve) => {
-                        requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                                console.log('ImageryLayerByObjectID: First paint cycle complete');
-                                resolve();
-                            });
-                        });
-                    });
-
-                    // Additional delay to ensure all pixels are painted
-                    console.log('ImageryLayerByObjectID: Waiting 2 seconds for all pixels to paint...');
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                    console.log('ImageryLayerByObjectID: Ready to capture screenshot');
+                    console.log('ImageryLayerByObjectID: Custom renderer ready for screenshot');
+                    // CustomRendererImageOverlay already waited for:
+                    // 1. Image to load from blob
+                    // 2. MediaLayer to be created and added
+                    // 3. Layer view to be created
+                    // 4. MapView to stop updating
+                    // 5. 2 second delay for painting
+                    // So we can capture immediately
                 } else {
                     console.log('ImageryLayerByObjectID: Waiting for layer to load...');
                     // Wait for layer to be loaded and stop updating
