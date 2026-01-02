@@ -94,7 +94,20 @@ export const CompositeLayer: FC<Props> = ({ groupLayer, mapView }) => {
 
     // Function to create custom renderer composite layer using direct HTTP request
     const createCustomRendererLayer = useCallback(async () => {
+        console.log('CompositeLayer: createCustomRendererLayer called', {
+            hasMapView: !!mapView,
+            hasCompositeSceneIds: !!compositeSceneIds,
+            compositeSceneIds,
+            hasRasterFunctionDefinition: !!queryParams.rasterFunctionDefinition,
+            rasterFunctionDefinition: queryParams.rasterFunctionDefinition,
+        });
+
         if (!mapView || !compositeSceneIds || !queryParams.rasterFunctionDefinition) {
+            console.log('CompositeLayer: Early return from createCustomRendererLayer', {
+                mapView: !!mapView,
+                compositeSceneIds: !!compositeSceneIds,
+                rasterFunctionDefinition: !!queryParams.rasterFunctionDefinition,
+            });
             return;
         }
 
