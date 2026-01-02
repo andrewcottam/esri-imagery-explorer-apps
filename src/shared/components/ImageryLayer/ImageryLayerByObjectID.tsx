@@ -193,11 +193,29 @@ const ImageryLayerByObjectID: FC<Props> = ({
         const handleLayerUpdate = async () => {
             try {
                 if (useCustomOverlay) {
-                    console.log('ImageryLayerByObjectID: Custom renderer ready, waiting for map view...');
-                    // For custom overlay, just wait for map view
-                    await mapView.when();
-                    // Add a small delay to ensure rendering is complete
-                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    console.log('ImageryLayerByObjectID: Custom renderer ready, waiting for map view to finish updating...');
+
+                    // Wait for mapView to finish updating
+                    await new Promise<void>((resolve) => {
+                        if (!mapView.updating) {
+                            console.log('ImageryLayerByObjectID: MapView already finished updating');
+                            resolve();
+                            return;
+                        }
+
+                        console.log('ImageryLayerByObjectID: MapView is updating, waiting...');
+                        const handle = mapView.watch('updating', (updating) => {
+                            console.log('ImageryLayerByObjectID: MapView updating state changed:', updating);
+                            if (!updating) {
+                                handle.remove();
+                                resolve();
+                            }
+                        });
+                    });
+
+                    console.log('ImageryLayerByObjectID: MapView finished updating, waiting additional 1 second...');
+                    // Add delay to ensure pixels are painted
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
                 } else {
                     console.log('ImageryLayerByObjectID: Waiting for layer to load...');
                     // Wait for layer to be loaded and stop updating
