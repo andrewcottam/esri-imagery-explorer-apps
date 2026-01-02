@@ -30,6 +30,18 @@ type Props = {
      * Callback when loading state changes (for loading spinner integration)
      */
     onLoadingChange?: (isLoading: boolean) => void;
+    /**
+     * ID of renderer that needs a screenshot captured after loading
+     */
+    pendingScreenshotRendererId?: string;
+    /**
+     * Firebase user for storing screenshot
+     */
+    firebaseUser?: { uid: string };
+    /**
+     * Callback to capture and save screenshot
+     */
+    onCaptureScreenshot?: () => Promise<void>;
 };
 
 /**
@@ -44,6 +56,9 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
     mosaicRule,
     visible,
     onLoadingChange,
+    pendingScreenshotRendererId,
+    firebaseUser,
+    onCaptureScreenshot,
 }) => {
     const layerRef = useRef<MediaLayer>(null);
     const abortControllerRef = useRef<AbortController>(null);
@@ -228,6 +243,17 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                 console.log('CustomRendererImageOverlay: Calling onLoadingChange(false) - ready for screenshot');
                 onLoadingChange(false);
             }
+
+            // Capture screenshot if needed
+            if (pendingScreenshotRendererId && firebaseUser && onCaptureScreenshot) {
+                console.log('CustomRendererImageOverlay: Capturing screenshot for renderer:', pendingScreenshotRendererId);
+                try {
+                    await onCaptureScreenshot();
+                    console.log('CustomRendererImageOverlay: Screenshot captured and saved successfully');
+                } catch (error) {
+                    console.error('CustomRendererImageOverlay: Failed to capture screenshot:', error);
+                }
+            }
         } catch (error: any) {
             // Notify that loading has finished (even on error)
             if (onLoadingChange) {
@@ -240,7 +266,7 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                 console.error('CustomRendererImageOverlay: Error fetching image:', error);
             }
         }
-    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible, onLoadingChange]);
+    }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible, onLoadingChange, pendingScreenshotRendererId, firebaseUser, onCaptureScreenshot]);
 
     // Fetch image when extent changes or rendering rule changes
     useEffect(() => {
