@@ -255,15 +255,16 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
                 }
             }
         } catch (error: any) {
-            // Notify that loading has finished (even on error)
-            if (onLoadingChange) {
-                onLoadingChange(false);
-            }
-
             if (error.name === 'AbortError') {
+                // Request was aborted - don't call onLoadingChange(false) because
+                // a new request has already started and called onLoadingChange(true)
                 console.log('CustomRendererImageOverlay: Request aborted');
             } else {
+                // Real error - notify that loading has finished
                 console.error('CustomRendererImageOverlay: Error fetching image:', error);
+                if (onLoadingChange) {
+                    onLoadingChange(false);
+                }
             }
         }
     }, [mapView, mosaicRule, rasterFunctionDefinition, serviceUrl, visible, onLoadingChange, pendingScreenshotRendererId, firebaseUser, onCaptureScreenshot]);
