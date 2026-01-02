@@ -175,17 +175,27 @@ const ImageryLayerByObjectID: FC<Props> = ({
             return;
         }
 
-        // If using custom overlay, wait for it to finish loading
+        // For regular layers, we need the layer object
+        if (!useCustomOverlay && !layer) {
+            console.log('ImageryLayerByObjectID: Screenshot capture skipped - no layer');
+            return;
+        }
+
+        // For custom overlay, MUST wait for loading to complete
+        // isCustomRendererLoading must be FALSE (finished loading, not "hasn't started yet")
+        // We distinguish by checking if visible is true (layer is active)
         if (useCustomOverlay) {
-            if (isCustomRendererLoading) {
+            if (!isCustomRendererLoading) {
+                // Loading is false - but has it even started? Check if we're visible
+                if (!visibility) {
+                    console.log('ImageryLayerByObjectID: Custom renderer not visible yet, waiting...');
+                    return;
+                }
+                // Loading is false AND we're visible = truly finished loading
+                console.log('ImageryLayerByObjectID: Custom renderer finished loading, will capture screenshot');
+            } else {
+                // Loading is true = currently loading, wait
                 console.log('ImageryLayerByObjectID: Waiting for custom renderer to finish loading...');
-                return;
-            }
-            console.log('ImageryLayerByObjectID: Custom renderer finished loading, will capture screenshot');
-        } else {
-            // For regular layers, we need the layer object
-            if (!layer) {
-                console.log('ImageryLayerByObjectID: Screenshot capture skipped - no layer');
                 return;
             }
         }
