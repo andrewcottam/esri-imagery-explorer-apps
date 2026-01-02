@@ -193,29 +193,24 @@ const ImageryLayerByObjectID: FC<Props> = ({
         const handleLayerUpdate = async () => {
             try {
                 if (useCustomOverlay) {
-                    console.log('ImageryLayerByObjectID: Custom renderer ready, waiting for map view to finish updating...');
+                    console.log('ImageryLayerByObjectID: Custom renderer ready, waiting for browser to paint...');
 
-                    // Wait for mapView to finish updating
+                    // Use requestAnimationFrame to ensure browser has painted the MediaLayer
+                    // Double RAF ensures we're past the paint phase
                     await new Promise<void>((resolve) => {
-                        if (!mapView.updating) {
-                            console.log('ImageryLayerByObjectID: MapView already finished updating');
-                            resolve();
-                            return;
-                        }
-
-                        console.log('ImageryLayerByObjectID: MapView is updating, waiting...');
-                        const handle = mapView.watch('updating', (updating) => {
-                            console.log('ImageryLayerByObjectID: MapView updating state changed:', updating);
-                            if (!updating) {
-                                handle.remove();
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                console.log('ImageryLayerByObjectID: First paint cycle complete');
                                 resolve();
-                            }
+                            });
                         });
                     });
 
-                    console.log('ImageryLayerByObjectID: MapView finished updating, waiting additional 1 second...');
-                    // Add delay to ensure pixels are painted
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    // Additional delay to ensure all pixels are painted
+                    console.log('ImageryLayerByObjectID: Waiting 2 seconds for all pixels to paint...');
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                    console.log('ImageryLayerByObjectID: Ready to capture screenshot');
                 } else {
                     console.log('ImageryLayerByObjectID: Waiting for layer to load...');
                     // Wait for layer to be loaded and stop updating
