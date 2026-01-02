@@ -192,33 +192,33 @@ export const CustomRendererImageOverlay: React.FC<Props> = ({
 
             console.log('CustomRendererImageOverlay: MediaLayer created and added to map');
 
-            // Wait for layer view to be created AND for mapView to finish updating
-            // This ensures we don't mark loading as complete too early
+            // Wait for layer view to be created AND for the LayerView itself to finish updating
             try {
-                await mapView.whenLayerView(layerRef.current);
-                console.log('CustomRendererImageOverlay: Layer view created');
+                const layerView = await mapView.whenLayerView(layerRef.current);
+                console.log('CustomRendererImageOverlay: Layer view created, waiting for it to finish updating...');
 
-                // Wait for mapView to finish updating before marking as complete
-                // This prevents the spinner from flickering
+                // Wait for the LayerView (not mapView) to stop updating
                 await new Promise<void>((resolve) => {
-                    if (!mapView.updating) {
+                    if (!layerView.updating) {
+                        console.log('CustomRendererImageOverlay: LayerView already finished updating');
                         resolve();
                         return;
                     }
 
-                    const handle = mapView.watch('updating', (updating) => {
+                    const handle = layerView.watch('updating', (updating) => {
+                        console.log('CustomRendererImageOverlay: LayerView updating:', updating);
                         if (!updating) {
+                            console.log('CustomRendererImageOverlay: LayerView finished updating');
                             handle.remove();
                             resolve();
                         }
                     });
                 });
-                console.log('CustomRendererImageOverlay: MapView finished updating');
 
-                // Additional delay to ensure pixels are actually painted to the canvas
-                console.log('CustomRendererImageOverlay: Waiting 2 more seconds for pixels to paint...');
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                console.log('CustomRendererImageOverlay: Pixels should be painted now');
+                // Additional small delay for final painting
+                console.log('CustomRendererImageOverlay: Waiting 500ms for final paint...');
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                console.log('CustomRendererImageOverlay: Ready for screenshot');
             } catch (err) {
                 console.warn('CustomRendererImageOverlay: Layer view creation warning:', err);
             }

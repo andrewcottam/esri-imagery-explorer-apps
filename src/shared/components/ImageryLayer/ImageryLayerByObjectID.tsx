@@ -199,14 +199,9 @@ const ImageryLayerByObjectID: FC<Props> = ({
         const handleLayerUpdate = async () => {
             try {
                 if (useCustomOverlay) {
-                    console.log('ImageryLayerByObjectID: Custom renderer loading finished, adding final delay...');
-
-                    // Even though CustomRendererImageOverlay waited for everything,
-                    // we need one more delay to ensure the MediaLayer is actually
-                    // painted on screen and the old layer is fully removed
-                    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-                    console.log('ImageryLayerByObjectID: Final delay complete, ready for screenshot');
+                    console.log('ImageryLayerByObjectID: Custom renderer ready (LayerView finished updating)');
+                    // CustomRendererImageOverlay now properly waits for LayerView.updating
+                    // to finish, so no additional delay needed
                 } else {
                     console.log('ImageryLayerByObjectID: Waiting for layer to load...');
                     // Wait for layer to be loaded and stop updating
