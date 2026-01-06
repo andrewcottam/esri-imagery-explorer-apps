@@ -37,27 +37,29 @@ export const MapillaryLayer: FC<Props> = ({ mapView, visible }) => {
 
         // Create Mapillary vector tile layer with custom styling
         // The layer shows sequences (connected images) as green lines
+        console.log('MapillaryLayer: Creating layer with URL:', MAPILLARY_TILES_URL);
+
         const layer = new VectorTileLayer({
-            url: MAPILLARY_TILES_URL,
             id: 'mapillary-coverage-layer',
             title: 'Mapillary Coverage',
             opacity: 0.8,
             visible: visible,
             // Custom style to show sequences as bright green lines
-            // This overrides the default Mapillary styling
             style: {
                 version: 8,
                 sources: {
-                    esri: {
+                    'mapillary-source': {
                         type: 'vector',
-                        url: MAPILLARY_TILES_URL,
+                        tiles: [MAPILLARY_TILES_URL],
+                        minzoom: 6,
+                        maxzoom: 14,
                     },
                 },
                 layers: [
                     {
                         id: 'mapillary-sequences',
                         type: 'line',
-                        source: 'esri',
+                        source: 'mapillary-source',
                         'source-layer': 'sequence',
                         layout: {
                             'line-cap': 'round',
@@ -80,7 +82,7 @@ export const MapillaryLayer: FC<Props> = ({ mapView, visible }) => {
                     {
                         id: 'mapillary-images',
                         type: 'circle',
-                        source: 'esri',
+                        source: 'mapillary-source',
                         'source-layer': 'image',
                         minzoom: 16,
                         paint: {
@@ -99,6 +101,13 @@ export const MapillaryLayer: FC<Props> = ({ mapView, visible }) => {
                     },
                 ],
             },
+        });
+
+        console.log('MapillaryLayer: Layer created, adding to map');
+        layer.load().then(() => {
+            console.log('MapillaryLayer: Layer loaded successfully');
+        }).catch((error) => {
+            console.error('MapillaryLayer: Error loading layer:', error);
         });
 
         mapView.map.add(layer);
