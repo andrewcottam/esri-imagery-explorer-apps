@@ -25,6 +25,7 @@ import { Zoom2NativeScale } from '../Zoom2NativeScale/Zoom2NativeScale';
 import { SearchWidget } from '../SearchWidget';
 import { useTranslation } from 'react-i18next';
 import { AddBookmarkButton } from '../AddBookmarkButton/AddBookmarkButton';
+import { BasemapGallery } from '../BasemapGallery';
 
 type Props = {
     mapView?: MapView;
@@ -55,6 +56,7 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
     return (
         <MapActionButtonGroup>
             <SearchWidget mapView={mapView} />
+            <BasemapGallery mapView={mapView} />
             <ZoomWidget mapView={mapView} />
             <Zoom2NativeScale
                 mapView={mapView}
