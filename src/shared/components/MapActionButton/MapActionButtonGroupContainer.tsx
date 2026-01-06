@@ -26,6 +26,7 @@ import { SearchWidget } from '../SearchWidget';
 import { useTranslation } from 'react-i18next';
 import { AddBookmarkButton } from '../AddBookmarkButton/AddBookmarkButton';
 import { BasemapGallery } from '../BasemapGallery';
+import { MapillaryControl } from '../MapillaryControl';
 
 type Props = {
     mapView?: MapView;
@@ -74,6 +75,7 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
             <div className="h-[1px] my-[5px] w-map-action-button-size bg-custom-background"></div>
 
             <AddBookmarkButton mapView={mapView} />
+            <MapillaryControl mapView={mapView} />
         </MapActionButtonGroup>
     );
 };
