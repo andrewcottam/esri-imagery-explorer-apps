@@ -100,11 +100,13 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
             event.stopPropagation();
 
             setIsLoading(true);
-            const point = mapView.toMap({ x: event.x, y: event.y });
+
+            // Use event.mapPoint directly instead of converting screen coordinates
+            const point = event.mapPoint;
 
             try {
-                // Query for closest Mapillary image
-                const image = await getClosestMapillaryImage(point, 200);
+                // Query for closest Mapillary image with larger search radius
+                const image = await getClosestMapillaryImage(point, 500);
 
                 if (!image) {
                     console.log('No Mapillary imagery found nearby');
