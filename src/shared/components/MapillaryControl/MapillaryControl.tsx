@@ -105,8 +105,8 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
             const point = event.mapPoint;
 
             try {
-                // Query for closest Mapillary image with larger search radius
-                const image = await getClosestMapillaryImage(point, 500);
+                // Query for closest Mapillary image - use smaller radius to get nearest image
+                const image = await getClosestMapillaryImage(point, 50);
 
                 if (!image) {
                     console.log('No Mapillary imagery found nearby');
@@ -179,7 +179,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                     graphicsLayerRef.current.add(markerGraphic);
                 }
 
-                // Show popup at image location
+                // Show popup at the actual image location
                 // Use openPopup method instead of popup.open to work with popupEnabled = false
                 if (mapView?.openPopup) {
                     mapView.openPopup({
