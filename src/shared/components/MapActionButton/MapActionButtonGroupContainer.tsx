@@ -16,9 +16,6 @@
 import MapView from '@arcgis/core/views/MapView';
 import React, { FC } from 'react';
 import { MapActionButtonGroup } from './MapActionButtonGroup';
-import { OpenSavePanelButton } from '../OpenSavePanelButton';
-import { CopyLinkWidget } from '../CopyLinkWidget';
-import { ScreenshotWidget } from '../ScreenshotWidget/ScreenshotWidget';
 import { ZoomToExtent } from '../ZoomToExtent';
 import { ZoomWidget } from '../MapView/ZoomWidget';
 import { Zoom2NativeScale } from '../Zoom2NativeScale/Zoom2NativeScale';
@@ -65,12 +62,6 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
                 tooltip={t('zoom_to_native_scale', { serviceName })}
             />
             <ZoomToExtent mapView={mapView} serviceUrl={serviceUrl} />
-
-            <div className="h-[1px] my-[5px] w-map-action-button-size bg-custom-background"></div>
-
-            <ScreenshotWidget mapView={mapView} />
-            <CopyLinkWidget />
-            <OpenSavePanelButton />
 
             <div className="h-[1px] my-[5px] w-map-action-button-size bg-custom-background"></div>
 

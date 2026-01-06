@@ -20,7 +20,6 @@ import MapView from './MapView';
 import { useAppSelector } from '@shared/store/configureStore';
 import {
     selectMapCenter,
-    selectMapPopupAnchorLocation,
     selectMapZoom,
     selectSwipeWidgetHandlerPosition,
 } from '../../store/Map/selectors';
@@ -55,7 +54,6 @@ import {
     selectIsSwipeModeOn,
 } from '@shared/store/ImageryScene/selectors';
 // import { selectActiveAnalysisTool } from '@shared/store/Analysis/selectors';
-import { MapCenterIndicator } from './MapCenterIndicator';
 // import { updateQueryLocation4SpectralProfileTool } from '@shared/store/SpectralProfileTool/thunks';
 import { appConfig } from '@shared/config';
 import { ZoomWidget } from './ZoomWidget';
@@ -94,8 +92,6 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
     const mode = useAppSelector(selectAppMode);
 
     // const analysisTool = useAppSelector(selectActiveAnalysisTool);
-
-    const anchorLocation = useAppSelector(selectMapPopupAnchorLocation);
 
     const isCustomRendererLoading = useAppSelector(selectIsCustomRendererLoading);
 
@@ -210,12 +206,6 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
                     active={showMapLoadingIndicator}
                     swipeWidgetHandlerPosition={
                         isSwipeWidgetVisible ? swipeWidgetHandlerPosition : null
-                    }
-                />
-
-                <MapCenterIndicator
-                    shouldShow={
-                        mode === 'find a scene' && anchorLocation === null
                     }
                 />
 
