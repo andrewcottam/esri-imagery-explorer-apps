@@ -49,7 +49,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 clickHandlerRef.current = null;
             }
             // Close popup when deactivating
-            if (mapView?.popup) {
+            if (mapView?.popup && typeof mapView.popup.close === 'function') {
                 mapView.popup.close();
             }
             return;
@@ -68,7 +68,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
 
                 if (!image) {
                     console.log('No Mapillary imagery found nearby');
-                    if (mapView?.popup) {
+                    if (mapView?.popup && typeof mapView.popup.close === 'function') {
                         mapView.popup.close();
                     }
                     setIsLoading(false);
@@ -111,7 +111,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 });
 
                 // Show popup at image location
-                if (mapView?.popup) {
+                if (mapView?.popup && typeof mapView.popup.open === 'function') {
                     mapView.popup.open({
                         title: 'Mapillary Street View',
                         content: content,
@@ -120,7 +120,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 }
             } catch (error) {
                 console.error('Error querying Mapillary:', error);
-                if (mapView?.popup) {
+                if (mapView?.popup && typeof mapView.popup.close === 'function') {
                     mapView.popup.close();
                 }
             } finally {
