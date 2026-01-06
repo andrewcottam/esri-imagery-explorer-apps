@@ -159,6 +159,13 @@ const MapViewContainer: FC<Props> = ({ mapOnClick, children }) => {
                 <EventHandlers
                     onStationary={(center, zoom, extent, resolution, scale) => {
                         // console.log('map view is stationary', center, zoom, extent);
+
+                        // Add null check for extent to prevent crashes during initialization
+                        if (!extent) {
+                            console.warn('onStationary called with null extent');
+                            return;
+                        }
+
                         dispatch(
                             centerChanged([center.longitude, center.latitude])
                         );
