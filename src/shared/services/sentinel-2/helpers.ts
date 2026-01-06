@@ -111,6 +111,19 @@ const BandIndexesLookup: Partial<Record<SpectralIndex, string>> = {
      */
     vegetation: '(B8-B4)/(B8+B4)',
     /**
+     * The Enhanced Vegetation Index (EVI) is an optimized vegetation index designed to enhance the vegetation signal
+     * with improved sensitivity in high biomass regions and improved vegetation monitoring through a de-coupling
+     * of the canopy background signal and a reduction in atmosphere influences.
+     *
+     * EVI = 2.5 * ((NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1))
+     * - NIR = pixel values from the near-infrared band
+     * - Red = pixel values from the red band
+     * - Blue = pixel values from the blue band
+     *
+     * This index outputs values between -1.0 and 1.0.
+     */
+    evi: '2.5*((B8-B4)/(B8+6*B4-7.5*B2+1))',
+    /**
      * The Modified Normalized Difference Water Index (MNDWI) uses green and SWIR bands for the enhancement of open water features.
      *
      * MNDWI = (Green - SWIR) / (Green + SWIR)
@@ -238,6 +251,8 @@ export const calcSentinel2SpectralIndex = (
         value = (B8 - B11) / (B8 + B11);
     } else if (spectralIndex === 'vegetation') {
         value = (B8 - B4) / (B8 + B4);
+    } else if (spectralIndex === 'evi') {
+        value = 2.5 * ((B8 - B4) / (B8 + 6 * B4 - 7.5 * B2 + 1));
     } else if (spectralIndex === 'water') {
         value = (B3 - B11) / (B3 + B11);
     }

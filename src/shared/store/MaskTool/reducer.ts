@@ -73,6 +73,10 @@ export const DefaultPixelValueRangeBySelectedIndex: MaskToolPixelValueRangeBySpe
             selectedRange: [0, 1],
             // color: [115, 255, 132],
         },
+        evi: {
+            selectedRange: [0, 1],
+            // color: [132, 255, 115],
+        },
         water: {
             selectedRange: [0, 1],
             // color: [89, 214, 255],
@@ -110,6 +114,7 @@ export const initialMaskToolState: MaskToolState = {
     pixelColorBySelectedIndex: {
         moisture: [89, 255, 252],
         vegetation: [115, 255, 132],
+        evi: [132, 255, 115],
         water: [89, 214, 255],
         'temperature farhenheit': [251, 182, 100],
         'temperature celcius': [251, 182, 100],

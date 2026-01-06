@@ -53,6 +53,7 @@ export type SpectralIndex =
     | 'water'
     | 'vegetation'
     | 'moisture'
+    | 'evi'
     | 'temperature farhenheit'
     | 'temperature celcius'
     | 'urban'
