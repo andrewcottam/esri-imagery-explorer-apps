@@ -96,6 +96,9 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
         clickHandlerRef.current = mapView.on('click', async (event) => {
             if (!isActive) return;
 
+            // Stop the event from propagating to other click handlers (like MapPopup)
+            event.stopPropagation();
+
             setIsLoading(true);
             const point = mapView.toMap({ x: event.x, y: event.y });
 
