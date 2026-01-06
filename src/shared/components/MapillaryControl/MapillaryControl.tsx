@@ -49,7 +49,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 clickHandlerRef.current = null;
             }
             // Close popup when deactivating
-            if (mapView) {
+            if (mapView?.popup) {
                 mapView.popup.close();
             }
             return;
@@ -68,7 +68,9 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
 
                 if (!image) {
                     console.log('No Mapillary imagery found nearby');
-                    mapView.popup.close();
+                    if (mapView?.popup) {
+                        mapView.popup.close();
+                    }
                     setIsLoading(false);
                     return;
                 }
@@ -109,14 +111,18 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 });
 
                 // Show popup at image location
-                mapView.popup.open({
-                    title: 'Mapillary Street View',
-                    content: content,
-                    location: imagePoint,
-                });
+                if (mapView?.popup) {
+                    mapView.popup.open({
+                        title: 'Mapillary Street View',
+                        content: content,
+                        location: imagePoint,
+                    });
+                }
             } catch (error) {
                 console.error('Error querying Mapillary:', error);
-                mapView.popup.close();
+                if (mapView?.popup) {
+                    mapView.popup.close();
+                }
             } finally {
                 setIsLoading(false);
             }

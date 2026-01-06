@@ -124,10 +124,15 @@ export const MapillaryLayer: FC<Props> = ({ mapView, visible }) => {
         layerRef.current = layer;
 
         return () => {
-            if (layerRef.current) {
-                mapView.map.remove(layerRef.current);
-                layerRef.current.destroy();
-                layerRef.current = null;
+            if (layerRef.current && mapView?.map) {
+                try {
+                    mapView.map.remove(layerRef.current);
+                    layerRef.current.destroy();
+                } catch (error) {
+                    console.error('MapillaryLayer: Error removing layer:', error);
+                } finally {
+                    layerRef.current = null;
+                }
             }
         };
     }, [mapView]);
