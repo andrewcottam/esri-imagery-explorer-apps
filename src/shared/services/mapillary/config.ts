@@ -21,8 +21,7 @@
 
 // Note: This is a public client token for demonstration purposes
 // In production, you should use your own token and protect it appropriately
-export const MAPILLARY_CLIENT_TOKEN =
-    process.env.MAPILLARY_CLIENT_TOKEN || 'MLY|4142433049200173|72206abe5035850d6743b23a49c41333';
+export const MAPILLARY_CLIENT_TOKEN = 'MLY|4142433049200173|72206abe5035850d6743b23a49c41333';
 
 export const MAPILLARY_GRAPH_API = 'https://graph.mapillary.com';
 export const MAPILLARY_VIEWER_URL = 'https://www.mapillary.com/app';
