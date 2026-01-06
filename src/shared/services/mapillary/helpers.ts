@@ -31,6 +31,9 @@ export type MapillaryImage = {
     compass_angle?: number;
     captured_at: number;
     sequence?: string;
+    thumb_256_url?: string;
+    thumb_1024_url?: string;
+    thumb_2048_url?: string;
 };
 
 /**
@@ -75,7 +78,7 @@ export const queryMapillaryImages = async (
         url.searchParams.append('limit', '10');
         url.searchParams.append(
             'fields',
-            'id,geometry,computed_geometry,compass_angle,captured_at,sequence'
+            'id,geometry,computed_geometry,compass_angle,captured_at,sequence,thumb_256_url,thumb_1024_url,thumb_2048_url'
         );
 
         const response = await fetch(url.toString());
@@ -138,12 +141,24 @@ export const getClosestMapillaryImage = async (
 
 /**
  * Get thumbnail URL for a Mapillary image
- * @param imageId - Mapillary image ID
- * @param size - Thumbnail size (320, 640, 1024, or 2048)
- * @returns Thumbnail URL
+ * @param image - Mapillary image object
+ * @param size - Thumbnail size preference (256, 1024, or 2048)
+ * @returns Thumbnail URL from API response
  */
-export const getMapillaryThumbnailUrl = (imageId: string, size: 320 | 640 | 1024 | 2048 = 640): string => {
-    return `https://images.mapillary.com/${imageId}/thumb-${size}.jpg`;
+export const getMapillaryThumbnailUrl = (image: MapillaryImage, size: 256 | 1024 | 2048 = 1024): string => {
+    // Return the requested size or fall back to available sizes
+    if (size === 2048 && image.thumb_2048_url) {
+        return image.thumb_2048_url;
+    }
+    if (size === 1024 && image.thumb_1024_url) {
+        return image.thumb_1024_url;
+    }
+    if (image.thumb_256_url) {
+        return image.thumb_256_url;
+    }
+
+    // Fallback: try available thumbnails in order of preference
+    return image.thumb_1024_url || image.thumb_2048_url || image.thumb_256_url || '';
 };
 
 /**

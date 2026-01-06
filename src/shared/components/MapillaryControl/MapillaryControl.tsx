@@ -76,7 +76,7 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 }
 
                 // Get thumbnail and viewer URLs
-                const thumbnailUrl = getMapillaryThumbnailUrl(image.id, 640);
+                const thumbnailUrl = getMapillaryThumbnailUrl(image, 1024);
                 const viewerUrl = getMapillaryViewerUrl(image.id);
 
                 // Format capture date
