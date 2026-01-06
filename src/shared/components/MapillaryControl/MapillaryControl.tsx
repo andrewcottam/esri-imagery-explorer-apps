@@ -16,6 +16,9 @@
 import React, { FC, useState, useEffect, useRef } from 'react';
 import MapView from '@arcgis/core/views/MapView';
 import Point from '@arcgis/core/geometry/Point';
+import Graphic from '@arcgis/core/Graphic';
+import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
+import SimpleMarkerSymbol from '@arcgis/core/symbols/SimpleMarkerSymbol';
 import { MapActionButton } from '../MapActionButton/MapActionButton';
 import { MapillaryLayer } from '../MapillaryLayer/MapillaryLayer';
 import {
@@ -39,6 +42,36 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
     const [isActive, setIsActive] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const clickHandlerRef = useRef<__esri.Handle | null>(null);
+    const graphicsLayerRef = useRef<GraphicsLayer | null>(null);
+
+    // Initialize graphics layer for marker
+    useEffect(() => {
+        if (!mapView) {
+            return;
+        }
+
+        // Create graphics layer if it doesn't exist
+        if (!graphicsLayerRef.current) {
+            graphicsLayerRef.current = new GraphicsLayer({
+                id: 'mapillary-marker-layer',
+                title: 'Mapillary Marker',
+            });
+            mapView.map.add(graphicsLayerRef.current);
+        }
+
+        return () => {
+            if (graphicsLayerRef.current && mapView?.map) {
+                try {
+                    mapView.map.remove(graphicsLayerRef.current);
+                    graphicsLayerRef.current.destroy();
+                } catch (error) {
+                    console.error('Error removing Mapillary marker layer:', error);
+                } finally {
+                    graphicsLayerRef.current = null;
+                }
+            }
+        };
+    }, [mapView]);
 
     // Handle map clicks when Mapillary is active
     useEffect(() => {
@@ -47,6 +80,10 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
             if (clickHandlerRef.current) {
                 clickHandlerRef.current.remove();
                 clickHandlerRef.current = null;
+            }
+            // Clear marker graphics
+            if (graphicsLayerRef.current) {
+                graphicsLayerRef.current.removeAll();
             }
             // Close popup when deactivating
             if (mapView?.popup && typeof mapView.popup.close === 'function') {
@@ -68,6 +105,10 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
 
                 if (!image) {
                     console.log('No Mapillary imagery found nearby');
+                    // Clear any existing marker
+                    if (graphicsLayerRef.current) {
+                        graphicsLayerRef.current.removeAll();
+                    }
                     if (mapView?.popup && typeof mapView.popup.close === 'function') {
                         mapView.popup.close();
                     }
@@ -109,6 +150,29 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                     latitude: imageCoords[1],
                     spatialReference: { wkid: 4326 },
                 });
+
+                // Clear previous marker graphics
+                if (graphicsLayerRef.current) {
+                    graphicsLayerRef.current.removeAll();
+
+                    // Add marker at exact image location
+                    const markerSymbol = new SimpleMarkerSymbol({
+                        style: 'cross',
+                        color: [5, 203, 99, 1], // Mapillary green
+                        size: 16,
+                        outline: {
+                            color: [255, 255, 255, 1],
+                            width: 2,
+                        },
+                    });
+
+                    const markerGraphic = new Graphic({
+                        geometry: imagePoint,
+                        symbol: markerSymbol,
+                    });
+
+                    graphicsLayerRef.current.add(markerGraphic);
+                }
 
                 // Show popup at image location
                 if (mapView?.popup && typeof mapView.popup.open === 'function') {
