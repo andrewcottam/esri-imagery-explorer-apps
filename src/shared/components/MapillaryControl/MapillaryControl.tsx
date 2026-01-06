@@ -105,8 +105,8 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
             const point = event.mapPoint;
 
             try {
-                // Query for closest Mapillary image - use smaller radius to get nearest image
-                const image = await getClosestMapillaryImage(point, 50);
+                // Query for closest Mapillary image - use tight radius to get nearest image
+                const image = await getClosestMapillaryImage(point, 20);
 
                 if (!image) {
                     console.log('No Mapillary imagery found nearby');
