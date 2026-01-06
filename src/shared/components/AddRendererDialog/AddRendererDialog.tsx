@@ -92,7 +92,7 @@ export const AddRendererDialog: FC<AddRendererDialogProps> = ({
                     </h4>
                     <textarea
                         className={`${TEXT_INPUT_STYLE} min-h-[200px] font-mono text-xs`}
-                        placeholder='Enter renderer JSON, e.g. {"rasterFunction": "Agriculture"}'
+                        placeholder='Enter renderer JSON, e.g. {"rasterFunction": "Agriculture"}. For more complex JSON renderers see some examples in: https://github.com/andrewcottam/esri-sentinel2-proxy/blob/main/python_client.py. When pasting code from Python, True values must be updated to true for Javascript.'
                         value={renderer}
                         onChange={(e) => handleRendererChange(e.target.value)}
                     ></textarea>
