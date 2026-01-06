@@ -23,6 +23,8 @@ export const getMainContent = (values: number[], mapPoint: Point) => {
         values
     ).toFixed(3);
 
+    const eviIndex = calcSentinel2SpectralIndex('evi', values).toFixed(3);
+
     const waterIndex = calcSentinel2SpectralIndex('water', values).toFixed(3);
 
     const moistureIndex = calcSentinel2SpectralIndex(
@@ -35,11 +37,13 @@ export const getMainContent = (values: number[], mapPoint: Point) => {
             data-testid='sentinel-2-popup-content'
             data-sentinel-2-ndmi="${moistureIndex}"
             data-sentinel-2-ndvi="${vegetationIndex}"
+            data-sentinel-2-evi="${eviIndex}"
             data-sentinel-2-mndwi="${waterIndex}"
         >
             <div class='mb-2'>
                 <span><span class='text-custom-light-blue-50'>NDMI:</span> ${moistureIndex}</span><br />
                 <span><span class='text-custom-light-blue-50'>NDVI:</span> ${vegetationIndex}</span><br />
+                <span><span class='text-custom-light-blue-50'>EVI:</span> ${eviIndex}</span><br />
                 <span><span class='text-custom-light-blue-50'>MNDWI:</span> ${waterIndex}</span>
             </div>
         </div>
