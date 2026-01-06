@@ -86,8 +86,8 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 graphicsLayerRef.current.removeAll();
             }
             // Close popup when deactivating
-            if (mapView?.popup && typeof mapView.popup.close === 'function') {
-                mapView.popup.close();
+            if (mapView?.closePopup) {
+                mapView.closePopup();
             }
             return;
         }
@@ -112,8 +112,8 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                     if (graphicsLayerRef.current) {
                         graphicsLayerRef.current.removeAll();
                     }
-                    if (mapView?.popup && typeof mapView.popup.close === 'function') {
-                        mapView.popup.close();
+                    if (mapView?.closePopup) {
+                        mapView.closePopup();
                     }
                     setIsLoading(false);
                     return;
@@ -178,8 +178,9 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 }
 
                 // Show popup at image location
-                if (mapView?.popup && typeof mapView.popup.open === 'function') {
-                    mapView.popup.open({
+                // Use openPopup method instead of popup.open to work with popupEnabled = false
+                if (mapView?.openPopup) {
+                    mapView.openPopup({
                         title: 'Mapillary Street View',
                         content: content,
                         location: imagePoint,
@@ -187,8 +188,8 @@ export const MapillaryControl: FC<Props> = ({ mapView }) => {
                 }
             } catch (error) {
                 console.error('Error querying Mapillary:', error);
-                if (mapView?.popup && typeof mapView.popup.close === 'function') {
-                    mapView.popup.close();
+                if (mapView?.closePopup) {
+                    mapView.closePopup();
                 }
             } finally {
                 setIsLoading(false);
