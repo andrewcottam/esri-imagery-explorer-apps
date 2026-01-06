@@ -137,12 +137,31 @@ export const getClosestMapillaryImage = async (
 };
 
 /**
+ * Get thumbnail URL for a Mapillary image
+ * @param imageId - Mapillary image ID
+ * @param size - Thumbnail size (320, 640, 1024, or 2048)
+ * @returns Thumbnail URL
+ */
+export const getMapillaryThumbnailUrl = (imageId: string, size: 320 | 640 | 1024 | 2048 = 640): string => {
+    return `https://images.mapillary.com/${imageId}/thumb-${size}.jpg`;
+};
+
+/**
+ * Get Mapillary viewer URL for a specific image
+ * @param imageId - Mapillary image ID
+ * @returns Viewer URL
+ */
+export const getMapillaryViewerUrl = (imageId: string): string => {
+    return `${MAPILLARY_VIEWER_URL}/?focus=photo&pKey=${imageId}`;
+};
+
+/**
  * Open Mapillary viewer for a specific image
  * @param imageId - Mapillary image ID
  * @param newWindow - Whether to open in a new window (default: true)
  */
 export const openMapillaryViewer = (imageId: string, newWindow: boolean = true): void => {
-    const url = `${MAPILLARY_VIEWER_URL}/?focus=photo&pKey=${imageId}`;
+    const url = getMapillaryViewerUrl(imageId);
 
     if (newWindow) {
         window.open(url, '_blank', 'noopener,noreferrer');
