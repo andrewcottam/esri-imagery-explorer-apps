@@ -42,6 +42,9 @@ type ClickedLocation = { lat: number; lon: number };
 /** How raw data is aggregated for display. 'raw' shows every observation. */
 type AggMode = 'raw' | 'mean' | 'min' | 'max';
 
+/** Pixel extents of an in-progress drag-to-select on the chart. */
+type DragSel = { startPx: number; endPx: number };
+
 type Props = { mapView?: MapView };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -145,6 +148,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const [indexType, setIndexType] = useState<IndexType>('ndvi');
     const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
     const [chartHeight, setChartHeight] = useState(DEFAULT_CHART_HEIGHT);
+    const [dragSel, setDragSel] = useState<DragSel | null>(null);
 
     const clickHandlerRef = useRef<__esri.Handle | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -300,6 +304,59 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         return smoothLine(aggregateByMonth(ndviData, aggMode));
     }, [ndviData, aggMode]);
 
+    // ── Drag-to-select date range ─────────────────────────────────────────────
+
+    const handleChartMouseDown = useCallback(
+        (e: React.MouseEvent<HTMLDivElement>) => {
+            if (chartData.length < 2) return;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            // Inner chart area: left margin=45, right margin=15
+            const innerW = rect.width - 45 - 15;
+            const clamp = (px: number) => Math.max(0, Math.min(innerW, px));
+            const startPx = clamp(e.clientX - rect.left - 45);
+
+            setDragSel({ startPx, endPx: startPx });
+
+            const onMove = (ev: MouseEvent) => {
+                setDragSel({ startPx, endPx: clamp(ev.clientX - rect.left - 45) });
+            };
+
+            const onUp = (ev: MouseEvent) => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                document.body.style.userSelect = '';
+
+                const endPx = clamp(ev.clientX - rect.left - 45);
+                setDragSel(null);
+
+                if (Math.abs(endPx - startPx) < 5) return; // treat as a plain click
+
+                const minPx = Math.min(startPx, endPx);
+                const maxPx = Math.max(startPx, endPx);
+                const minTime = chartData[0].x;
+                const maxTime = chartData[chartData.length - 1].x;
+
+                // Convert pixel offsets → timestamps → ISO date strings
+                const t1 = minTime + (minPx / innerW) * (maxTime - minTime);
+                const t2 = minTime + (maxPx / innerW) * (maxTime - minTime);
+                const newStart = new Date(t1).toISOString().substring(0, 10);
+                const newEnd   = new Date(t2).toISOString().substring(0, 10);
+
+                setStartDate(newStart);
+                setEndDate(newEnd);
+                if (location) {
+                    fetchData(location.lat, location.lon, newStart, newEnd, indexType);
+                }
+            };
+
+            document.body.style.userSelect = 'none';
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        },
+        [chartData, location, indexType, fetchData]
+    );
+
     // Dynamic y-axis — extend below -0.2 or above 1 when the data warrants it
     // (e.g. EVI can exceed 1.0 in dense canopy).
     const yMin = useMemo(() => {
@@ -323,7 +380,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         const maxYear = new Date(chartData[chartData.length - 1].x).getUTCFullYear();
         const lines: VerticalReferenceLineData[] = [];
         for (let yr = minYear + 1; yr <= maxYear; yr++) {
-            lines.push({ x: Date.UTC(yr, 0, 1), tooltip: String(yr) });
+            lines.push({ x: Date.UTC(yr, 0, 1) } as VerticalReferenceLineData);
         }
         return lines.length > 0 ? lines : undefined;
     }, [chartData]);
@@ -416,6 +473,13 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                             value={startDate}
                             max={endDate}
                             onChange={(e) => setStartDate(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && location) {
+                                    const newStart = e.currentTarget.value;
+                                    setStartDate(newStart);
+                                    fetchData(location.lat, location.lon, newStart, endDate, indexType);
+                                }
+                            }}
                             style={{
                                 background: 'transparent',
                                 border: '1px solid var(--custom-light-blue-25)',
@@ -437,6 +501,13 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                             value={endDate}
                             min={startDate}
                             onChange={(e) => setEndDate(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && location) {
+                                    const newEnd = e.currentTarget.value;
+                                    setEndDate(newEnd);
+                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType);
+                                }
+                            }}
                             style={{
                                 background: 'transparent',
                                 border: '1px solid var(--custom-light-blue-25)',
@@ -447,6 +518,30 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 colorScheme: 'dark',
                             }}
                         />
+                        <button
+                            onClick={() => {
+                                const fullStart = '2015-06-23';
+                                const fullEnd = new Date().toISOString().substring(0, 10);
+                                setStartDate(fullStart);
+                                setEndDate(fullEnd);
+                                if (location) {
+                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType);
+                                }
+                            }}
+                            title="Reset to full Sentinel-2 time range (Jun 2015 – today)"
+                            style={{
+                                fontSize: 11,
+                                padding: '1px 8px',
+                                borderRadius: 10,
+                                border: '1px solid var(--custom-light-blue-25)',
+                                background: 'transparent',
+                                color: 'var(--custom-light-blue-50)',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            All
+                        </button>
                         {location && (
                             <button
                                 onClick={() =>
@@ -515,15 +610,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
 
                         {location && (
                             <>
-                                {/* Clicked coordinate */}
-                                <div
-                                    className="text-xs mb-2 mt-1"
-                                    style={{ color: 'var(--custom-light-blue-50)' }}
-                                >
-                                    {location.lat.toFixed(4)}°{location.lat >= 0 ? 'N' : 'S'},{' '}
-                                    {location.lon.toFixed(4)}°{location.lon >= 0 ? 'E' : 'W'}
-                                </div>
-
                                 {isLoading && (
                                     <div
                                         className="flex items-center justify-center text-xs py-10"
@@ -543,9 +629,17 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 )}
 
                                 {!isLoading && !error && chartData.length > 0 && (
+                                    <>
+                                    {/* The library's VerticalReferenceLine groups sit above the
+                                        PointerEventsOverlay and steal mouse events, preventing
+                                        the data crosshair/tooltip from firing. Re-enable the
+                                        pointer-events:none that the library has commented out. */}
+                                    <style>{`.vertical-reference-line-group { pointer-events: none !important; }`}</style>
                                     <div
                                         style={{
                                             height: chartHeight,
+                                            position: 'relative',
+                                            cursor: 'crosshair',
                                             '--axis-tick-line-color': 'var(--custom-light-blue-50)',
                                             '--axis-tick-text-color': 'var(--custom-light-blue-50)',
                                             '--crosshair-reference-line-color': 'var(--custom-light-blue-50)',
@@ -554,6 +648,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             '--tooltip-background-color': 'var(--custom-background-95)',
                                             '--tooltip-border-color': 'var(--custom-light-blue-50)',
                                         } as React.CSSProperties}
+                                        onMouseDown={handleChartMouseDown}
                                     >
                                         <LineChartBasic
                                             data={chartData}
@@ -573,10 +668,27 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             }}
                                             verticalReferenceLines={verticalReferenceLines}
                                         />
+                                        {/* Drag-to-select highlight rectangle */}
+                                        {dragSel && Math.abs(dragSel.endPx - dragSel.startPx) > 2 && (
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    left: 45 + Math.min(dragSel.startPx, dragSel.endPx),
+                                                    width: Math.abs(dragSel.endPx - dragSel.startPx),
+                                                    top: 10,    // matches margin.top
+                                                    bottom: 30, // matches margin.bottom
+                                                    background: 'rgba(5, 203, 99, 0.15)',
+                                                    border: '1px solid rgba(5, 203, 99, 0.5)',
+                                                    borderRadius: 2,
+                                                    pointerEvents: 'none',
+                                                }}
+                                            />
+                                        )}
                                     </div>
+                                    </>
                                 )}
 
-                                {/* Aggregation mode toggles — below the chart */}
+                                {/* Aggregation mode toggles + observation count — below the chart */}
                                 {!isLoading && !error && chartData.length > 0 && (
                                     <div className="flex items-center gap-2 pt-2">
                                         {aggModes.map(({ key, label }) => {
@@ -602,6 +714,19 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                 </button>
                                             );
                                         })}
+                                        <span
+                                            className="ml-auto"
+                                            style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
+                                        >
+                                            {location.lat.toFixed(4)}°{location.lat >= 0 ? 'N' : 'S'},{' '}
+                                            {location.lon.toFixed(4)}°{location.lon >= 0 ? 'E' : 'W'}
+                                        </span>
+                                        <span
+                                            style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
+                                            title="Total number of observations"
+                                        >
+                                            n&nbsp;=&nbsp;{ndviData.length}
+                                        </span>
                                     </div>
                                 )}
                             </>
