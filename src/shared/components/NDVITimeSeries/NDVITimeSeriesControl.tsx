@@ -87,10 +87,12 @@ const aggregateByMonth = (
 
     for (const d of data) {
         if (!d.date) continue;
-        const dt = new Date(d.date);
-        const year = dt.getUTCFullYear();
-        const month = dt.getUTCMonth();
-        const key = `${year}-${month}`;
+        // Use the ISO date string prefix directly ("YYYY-MM") to avoid
+        // timezone-induced month drift when parsing bare date strings.
+        const yearMonth = d.date.substring(0, 7); // "YYYY-MM"
+        const year = +yearMonth.substring(0, 4);
+        const month = +yearMonth.substring(5, 7) - 1; // 0-indexed
+        const key = yearMonth; // unique per calendar month within each year
         if (!buckets.has(key)) buckets.set(key, { year, month, vals: [] });
         buckets.get(key)!.vals.push(d.ndvi);
     }
@@ -172,6 +174,11 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         outline: { color: [255, 255, 255, 200], width: 1.5 },
                     }),
                 })
+            );
+            // Keep the marker on top of any layers added after it (e.g. SCL).
+            mapView.map.reorder(
+                graphicsLayerRef.current,
+                mapView.map.layers.length - 1
             );
         },
         [mapView]
@@ -293,14 +300,21 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         return smoothLine(aggregateByMonth(ndviData, aggMode));
     }, [ndviData, aggMode]);
 
-    // Dynamic y-axis — extend below -0.2 for water/negative NDVI land covers.
+    // Dynamic y-axis — extend below -0.2 or above 1 when the data warrants it
+    // (e.g. EVI can exceed 1.0 in dense canopy).
     const yMin = useMemo(() => {
         if (ndviData.length === 0) return -0.2;
         const dataMin = Math.min(...ndviData.map((d) => d.ndvi));
         return Math.min(-0.2, Math.floor(dataMin * 10) / 10);
     }, [ndviData]);
 
-    const yDomain: [number, number] = [yMin, 1];
+    const yMax = useMemo(() => {
+        if (ndviData.length === 0) return 1;
+        const dataMax = Math.max(...ndviData.map((d) => d.ndvi));
+        return Math.max(1, Math.ceil(dataMax * 10) / 10);
+    }, [ndviData]);
+
+    const yDomain: [number, number] = [yMin, yMax];
 
     // Year-boundary vertical reference lines (Jan 1 of each year in range).
     const verticalReferenceLines = useMemo<VerticalReferenceLineData[] | undefined>(() => {
@@ -323,9 +337,15 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         return spanMonths > 0 && innerWidth / spanMonths >= MONTH_LABEL_THRESHOLD_PX;
     }, [chartData, panelWidth]);
 
+    // When showing year-only labels use the number of distinct years so each
+    // year appears at most once.  When showing month labels count the months.
     const xTickCount = showMonthLabels
         ? Math.min(14, Math.round((chartData[chartData.length - 1]?.x - chartData[0]?.x) / (1000 * 60 * 60 * 24 * 30.44)))
-        : 5;
+        : chartData.length >= 2
+        ? new Date(chartData[chartData.length - 1].x).getUTCFullYear() -
+          new Date(chartData[0].x).getUTCFullYear() +
+          1
+        : 3;
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -340,7 +360,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         <>
             {/* Toggle button in the map action button strip */}
             <MapActionButton
-                tooltip={isActive ? 'Disable NDVI time series' : 'Show NDVI time series'}
+                tooltip={isActive ? 'Disable time series' : 'Show time series'}
                 onClickHandler={() => setIsActive((v) => !v)}
                 active={isActive}
                 showLoadingIndicator={isLoading}
@@ -371,7 +391,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                             className="text-xs font-semibold uppercase tracking-wider"
                             style={{ color: 'var(--custom-light-blue)' }}
                         >
-                            {indexType.toUpperCase()} Time Series
+                            Time Series
                         </span>
                         <button
                             onClick={() => setIsActive(false)}
@@ -489,7 +509,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 className="flex items-center justify-center text-xs py-8"
                                 style={{ color: 'var(--custom-light-blue-50)' }}
                             >
-                                Click anywhere on the map to load NDVI time series
+                                Click anywhere on the map to load time series
                             </div>
                         )}
 
