@@ -127,6 +127,123 @@ export const fetchNDVITimeSeries = async (
     return { data, linearRegression };
 };
 
+// ── Harmonic regression ───────────────────────────────────────────────────────
+
+export type HarmonicRegressionResult = {
+    /** Smooth fitted curve (x = timestamp ms, y = fitted value) */
+    curve: { x: number; y: number }[];
+    /** Root mean squared error over the input data points */
+    rmse: number;
+    /** Coefficient of determination (R²) */
+    r2: number;
+    /** OLS coefficients [a0, a1, b1, a2, b2, ...] */
+    coefficients: number[];
+    /** Number of harmonics fitted */
+    nHarmonics: number;
+};
+
+/**
+ * Solve Ax = b using Gauss-Jordan elimination with partial pivoting.
+ * Returns the solution vector x.
+ */
+function solveLinearSystem(A: number[][], b: number[]): number[] {
+    const n = A.length;
+    // Build augmented matrix [A | b]
+    const aug = A.map((row, i) => [...row, b[i]]);
+    for (let col = 0; col < n; col++) {
+        // Find the row with the largest absolute value in this column
+        let maxRow = col;
+        for (let row = col + 1; row < n; row++) {
+            if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) maxRow = row;
+        }
+        [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+        const pivot = aug[col][col];
+        if (Math.abs(pivot) < 1e-14) continue;
+        // Normalize the pivot row
+        for (let j = col; j <= n; j++) aug[col][j] /= pivot;
+        // Eliminate this column from all other rows
+        for (let row = 0; row < n; row++) {
+            if (row === col) continue;
+            const f = aug[row][col];
+            for (let j = col; j <= n; j++) aug[row][j] -= f * aug[col][j];
+        }
+    }
+    return aug.map((row) => row[n]);
+}
+
+/**
+ * Fit a harmonic (Fourier) regression to time-series data using OLS.
+ *
+ *   y = a0 + Σk [ak·cos(2πkt/T) + bk·sin(2πkt/T)]
+ *
+ * where T = 1 year and t = years elapsed since the first data point.
+ *
+ * @param data       Input data points { x: timestamp ms, y: index value }
+ * @param nHarmonics Number of harmonics (1 = annual only, 2 = annual + semi-annual)
+ * @param curveSamples Number of points in the returned smooth curve
+ */
+export function fitHarmonicRegression(
+    data: { x: number; y: number }[],
+    nHarmonics = 2,
+    curveSamples = 300
+): HarmonicRegressionResult | null {
+    const n = data.length;
+    const numCols = 1 + 2 * nHarmonics;
+    if (n < numCols + 2) return null; // need more observations than parameters
+
+    const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+    const originMs = data[0].x; // centre time at first observation to improve conditioning
+
+    // Build design matrix X (n × numCols)
+    const X: number[][] = data.map((pt) => {
+        const tYears = (pt.x - originMs) / MS_PER_YEAR;
+        const row: number[] = [1];
+        for (let k = 1; k <= nHarmonics; k++) {
+            row.push(Math.cos(2 * Math.PI * k * tYears));
+            row.push(Math.sin(2 * Math.PI * k * tYears));
+        }
+        return row;
+    });
+
+    const y = data.map((pt) => pt.y);
+
+    // Normal equations: (XᵀX) β = Xᵀy
+    const XtX: number[][] = Array.from({ length: numCols }, (_, i) =>
+        Array.from({ length: numCols }, (_, j) =>
+            X.reduce((s, row) => s + row[i] * row[j], 0)
+        )
+    );
+    const Xty: number[] = Array.from({ length: numCols }, (_, i) =>
+        X.reduce((s, row, ri) => s + row[i] * y[ri], 0)
+    );
+
+    const beta = solveLinearSystem(XtX, Xty);
+
+    // Fitted values, residuals, goodness-of-fit
+    const yHat = X.map((row) => row.reduce((s, x, i) => s + x * beta[i], 0));
+    const yMean = y.reduce((a, b) => a + b, 0) / n;
+    const sse = y.reduce((sum, yi, i) => sum + (yi - yHat[i]) ** 2, 0);
+    const sst = y.reduce((sum, yi) => sum + (yi - yMean) ** 2, 0);
+    const rmse = Math.sqrt(sse / n);
+    const r2 = sst > 0 ? 1 - sse / sst : 0;
+
+    // Smooth curve for display
+    const minX = data[0].x;
+    const maxX = data[data.length - 1].x;
+    const curve = Array.from({ length: curveSamples }, (_, i) => {
+        const t = minX + (i / (curveSamples - 1)) * (maxX - minX);
+        const tYears = (t - originMs) / MS_PER_YEAR;
+        let yFit = beta[0];
+        for (let k = 1; k <= nHarmonics; k++) {
+            yFit += beta[2 * k - 1] * Math.cos(2 * Math.PI * k * tYears);
+            yFit += beta[2 * k] * Math.sin(2 * Math.PI * k * tYears);
+        }
+        return { x: t, y: yFit };
+    });
+
+    return { curve, rmse, r2, coefficients: beta, nHarmonics };
+}
+
 /**
  * Returns the default start date (2 years ago) as a YYYY-MM-DD string.
  */

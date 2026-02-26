@@ -33,6 +33,8 @@ import {
     NDVIDataPoint,
     IndexType,
     LinearRegression,
+    HarmonicRegressionResult,
+    fitHarmonicRegression,
 } from '@shared/services/ndvi-timeseries/helpers';
 import { formatInUTCTimeZone } from '@shared/utils/date-time/formatInUTCTimeZone';
 import {
@@ -59,6 +61,9 @@ type ClickedLocation = { lat: number; lon: number };
 /** How raw data is aggregated for display. 'raw' shows every observation. */
 type AggMode = 'raw' | 'mean' | 'min' | 'max';
 
+/** Active curve model overlaid on the chart. */
+type ModelType = 'none' | 'linear' | 'harmonic';
+
 /** Pixel extents of an in-progress drag-to-select on the chart. */
 type DragSel = { startPx: number; endPx: number };
 
@@ -78,6 +83,11 @@ const DEFAULT_CHART_HEIGHT = 200;
  * "MMM yyyy" needs at least ~55 px to avoid overlap.
  */
 const MONTH_LABEL_THRESHOLD_PX = 55;
+
+/**
+ * Minimum pixels per day to show day-level tick marks.
+ */
+const DAY_TICK_THRESHOLD_PX = 5;
 
 /** Chart left+right margins (determines inner drawing width from panel width). */
 const CHART_MARGIN_H = 60; // left 45 + right 15
@@ -110,12 +120,10 @@ const aggregateByMonth = (
 
     for (const d of data) {
         if (!d.date) continue;
-        // Use the ISO date string prefix directly ("YYYY-MM") to avoid
-        // timezone-induced month drift when parsing bare date strings.
-        const yearMonth = d.date.substring(0, 7); // "YYYY-MM"
+        const yearMonth = d.date.substring(0, 7);
         const year = +yearMonth.substring(0, 4);
-        const month = +yearMonth.substring(5, 7) - 1; // 0-indexed
-        const key = yearMonth; // unique per calendar month within each year
+        const month = +yearMonth.substring(5, 7) - 1;
+        const key = yearMonth;
         if (!buckets.has(key)) buckets.set(key, { year, month, vals: [] });
         buckets.get(key)!.vals.push(d.ndvi);
     }
@@ -139,20 +147,19 @@ const aggregateByMonth = (
     return points.sort((a, b) => a.x - b.x);
 };
 
-/**
- * Single-pass weighted 3-point smoother [0.25, 0.5, 0.25].
- * End-points are left unchanged.
- */
-const smoothLine = (data: LineChartDataItem[]): LineChartDataItem[] => {
-    if (data.length < 3) return data;
-    return data.map((pt, i) => {
-        if (i === 0 || i === data.length - 1) return pt;
-        return {
-            ...pt,
-            y: 0.25 * data[i - 1].y + 0.5 * pt.y + 0.25 * data[i + 1].y,
-        };
-    });
-};
+// ── Shared button style helper ─────────────────────────────────────────────────
+
+const pillStyle = (active: boolean, activeColor: string): React.CSSProperties => ({
+    fontSize: 11,
+    padding: '1px 10px',
+    borderRadius: 10,
+    border: active ? `1px solid ${activeColor}` : '1px solid var(--custom-light-blue-25)',
+    background: active ? `${activeColor}26` : 'transparent',
+    color: active ? activeColor : 'var(--custom-light-blue-50)',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap' as const,
+});
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -162,7 +169,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const [location, setLocation] = useState<ClickedLocation | null>(null);
     const [ndviData, setNdviData] = useState<NDVIDataPoint[]>([]);
     const [linearRegression, setLinearRegression] = useState<LinearRegression | null>(null);
-    const [showTrendLine, setShowTrendLine] = useState(false);
+    const [activeModel, setActiveModel] = useState<ModelType>('none');
     const [startDate, setStartDate] = useState(getDefaultStartDate);
     const [endDate, setEndDate] = useState(getDefaultEndDate);
     const [error, setError] = useState<string | null>(null);
@@ -171,25 +178,27 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
     const [chartHeight, setChartHeight] = useState(DEFAULT_CHART_HEIGHT);
     const [dragSel, setDragSel] = useState<DragSel | null>(null);
+    const [showData, setShowData] = useState(true);
 
     const clickHandlerRef = useRef<__esri.Handle | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const graphicsLayerRef = useRef<GraphicsLayer | null>(null);
 
-    // Stable ref so resize callbacks never need to be re-created when size changes.
+    // Stable refs so resize/drag callbacks never need to be re-created.
     const sizeRef = useRef({ width: DEFAULT_PANEL_WIDTH, height: DEFAULT_CHART_HEIGHT });
     sizeRef.current = { width: panelWidth, height: chartHeight };
 
-    // Stable ref for showTrendLine so the map-click handler always reads the
-    // current value without needing to be re-registered when the toggle changes.
-    const showTrendLineRef = useRef(showTrendLine);
-    showTrendLineRef.current = showTrendLine;
+    // Stable refs for values read inside stable callbacks.
+    const activeModelRef = useRef<ModelType>(activeModel);
+    activeModelRef.current = activeModel;
+    const ndviDataRef = useRef<NDVIDataPoint[]>(ndviData);
+    ndviDataRef.current = ndviData;
+    const aggModeRef = useRef<AggMode>(aggMode);
+    aggModeRef.current = aggMode;
 
-    // Redux integration — used to load a Sentinel-2 scene when the user clicks
-    // on a data point in the time-series chart.
+    // Redux integration — used to load a Sentinel-2 scene on chart click.
     const dispatch = useAppDispatch();
     const queryParams = useAppSelector(selectQueryParams4SceneInSelectedMode);
-    // Stable ref so the drag-handler closure always reads the latest value.
     const queryParamsRef = useRef(queryParams);
     queryParamsRef.current = queryParams;
 
@@ -214,7 +223,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                     }),
                 })
             );
-            // Keep the marker on top of any layers added after it (e.g. SCL).
             mapView.map.reorder(
                 graphicsLayerRef.current,
                 mapView.map.layers.length - 1
@@ -271,7 +279,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             const lon = Math.round(longitude * 1e6) / 1e6;
             setLocation({ lat, lon });
             showPointOnMap(lat, lon);
-            fetchData(lat, lon, startDate, endDate, indexType, showTrendLineRef.current);
+            fetchData(lat, lon, startDate, endDate, indexType, activeModelRef.current === 'linear');
         });
         return () => {
             clickHandlerRef.current?.remove();
@@ -291,6 +299,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             setLocation(null);
             setNdviData([]);
             setLinearRegression(null);
+            setActiveModel('none');
             setError(null);
         }
     }, [isActive, mapView]);
@@ -301,7 +310,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         if (prevIndexRef.current === indexType) return;
         prevIndexRef.current = indexType;
         if (location && isActive) {
-            fetchData(location.lat, location.lon, startDate, endDate, indexType, showTrendLineRef.current);
+            fetchData(location.lat, location.lon, startDate, endDate, indexType, activeModelRef.current === 'linear');
         }
     }, [indexType, location, isActive, startDate, endDate, fetchData]);
 
@@ -337,7 +346,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         },
-        [] // stable — reads size via sizeRef
+        []
     );
 
     // ── Derived chart data ────────────────────────────────────────────────────
@@ -345,8 +354,59 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const chartData = useMemo<LineChartDataItem[]>(() => {
         if (ndviData.length === 0) return [];
         if (aggMode === 'raw') return ndviToChartData(ndviData);
-        return smoothLine(aggregateByMonth(ndviData, aggMode));
+        return aggregateByMonth(ndviData, aggMode);
     }, [ndviData, aggMode]);
+
+    // ── Data statistics (range, mean, std of displayed series) ───────────────
+
+    const dataStats = useMemo(() => {
+        if (chartData.length === 0) return null;
+        const vals = chartData.map((pt) => pt.y);
+        const n = vals.length;
+        const mean = vals.reduce((a, b) => a + b, 0) / n;
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        const std = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / n);
+        return { mean, min, max, range: max - min, std };
+    }, [chartData]);
+
+    // ── Model fits ────────────────────────────────────────────────────────────
+
+    /** Harmonic regression curve — always computed from raw observations so it
+     *  is unaffected by the current aggregation mode. */
+    const harmonicFit = useMemo<HarmonicRegressionResult | null>(() => {
+        const rawData = ndviToChartData(ndviData);
+        if (activeModel !== 'harmonic' || rawData.length < 8) return null;
+        return fitHarmonicRegression(rawData, 2);
+    }, [activeModel, ndviData]);
+
+    /** RMSE of the linear regression fit — always computed against raw observations
+     *  so the value is unaffected by the current aggregation mode. */
+    const linearRMSE = useMemo<number | null>(() => {
+        if (!linearRegression) return null;
+        const rawData = ndviToChartData(ndviData);
+        if (rawData.length < 2) return null;
+        const firstX = rawData[0].x;
+        const lastX = rawData[rawData.length - 1].x;
+        const spanX = lastX - firstX;
+        if (spanX === 0) return null;
+        let sse = 0;
+        if (linearRegression.slope !== undefined && linearRegression.intercept !== undefined) {
+            const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+            for (const pt of rawData) {
+                const tYears = (pt.x - firstX) / MS_PER_YEAR;
+                const yFit = linearRegression.intercept + linearRegression.slope * tYears;
+                sse += (pt.y - yFit) ** 2;
+            }
+        } else {
+            for (const pt of rawData) {
+                const t = (pt.x - firstX) / spanX;
+                const yFit = linearRegression.y1 + t * (linearRegression.y2 - linearRegression.y1);
+                sse += (pt.y - yFit) ** 2;
+            }
+        }
+        return Math.sqrt(sse / rawData.length);
+    }, [linearRegression, ndviData]);
 
     // ── Drag-to-select date range ─────────────────────────────────────────────
 
@@ -355,7 +415,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             if (chartData.length < 2) return;
 
             const rect = e.currentTarget.getBoundingClientRect();
-            // Inner chart area: left margin=45, right margin=15
             const innerW = rect.width - 45 - 15;
             const clamp = (px: number) => Math.max(0, Math.min(innerW, px));
             const startPx = clamp(e.clientX - rect.left - 45);
@@ -375,36 +434,29 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                 setDragSel(null);
 
                 if (Math.abs(endPx - startPx) < 5) {
-                    // Plain click → find the closest data point and load that
-                    // Sentinel-2 scene, switching to "find a scene" mode.
+                    // Plain click → find the closest data point (using raw observations
+                    // when in an aggregated mode so we can load an actual Sentinel-2 scene).
                     const minTime = chartData[0].x;
                     const maxTime = chartData[chartData.length - 1].x;
-                    const clickTime =
-                        minTime + (startPx / innerW) * (maxTime - minTime);
-                    const closest = chartData.reduce((prev, curr) =>
-                        Math.abs(curr.x - clickTime) <
-                        Math.abs(prev.x - clickTime)
-                            ? curr
-                            : prev
-                    );
-                    // Convert timestamp → YYYY-MM-DD (data dates are UTC midnight)
-                    const clickedDate = new Date(closest.x)
-                        .toISOString()
-                        .substring(0, 10);
+                    const clickTime = minTime + (startPx / innerW) * (maxTime - minTime);
 
-                    // Switch to "find a scene" so the Calendar + year selector
-                    // react to the date, and the imagery layer renders the scene.
+                    // In aggregated modes the chartData points are monthly centroids and
+                    // don't correspond to actual acquisition dates — search raw ndviData instead.
+                    const rawData = aggModeRef.current !== 'raw' && ndviDataRef.current.length > 0
+                        ? ndviToChartData(ndviDataRef.current)
+                        : chartData;
+
+                    const closest = rawData.reduce((prev, curr) =>
+                        Math.abs(curr.x - clickTime) < Math.abs(prev.x - clickTime) ? curr : prev
+                    );
+
+                    const clickedDate = new Date(closest.x).toISOString().substring(0, 10);
+
                     dispatch(modeChanged('find a scene'));
-                    // Fall back to Natural Color if no renderer is selected yet.
                     if (!queryParamsRef.current?.rasterFunctionName) {
-                        dispatch(
-                            updateRasterFunctionName(DEFAULT_RASTER_FUNCTION)
-                        );
+                        dispatch(updateRasterFunctionName(DEFAULT_RASTER_FUNCTION));
                     }
-                    // Force scene re-selection so useFindSelectedSceneByDate
-                    // doesn't skip the update when a scene is already locked.
                     dispatch(shouldForceSceneReselectionUpdated(true));
-                    // Set the acquisition date and sync the year selector.
                     dispatch(updateAcquisitionDate(clickedDate, true));
                     return;
                 }
@@ -414,7 +466,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                 const minTime = chartData[0].x;
                 const maxTime = chartData[chartData.length - 1].x;
 
-                // Convert pixel offsets → timestamps → ISO date strings
                 const t1 = minTime + (minPx / innerW) * (maxTime - minTime);
                 const t2 = minTime + (maxPx / innerW) * (maxTime - minTime);
                 const newStart = new Date(t1).toISOString().substring(0, 10);
@@ -423,7 +474,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                 setStartDate(newStart);
                 setEndDate(newEnd);
                 if (location) {
-                    fetchData(location.lat, location.lon, newStart, newEnd, indexType, showTrendLineRef.current);
+                    fetchData(location.lat, location.lon, newStart, newEnd, indexType, activeModelRef.current === 'linear');
                 }
             };
 
@@ -434,8 +485,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         [chartData, location, indexType, fetchData, dispatch]
     );
 
-    // Dynamic y-axis — extend below -0.2 or above 1 when the data warrants it
-    // (e.g. EVI can exceed 1.0 in dense canopy).
+    // ── Y-axis domain ─────────────────────────────────────────────────────────
+
     const yMin = useMemo(() => {
         if (ndviData.length === 0) return -0.2;
         const dataMin = Math.min(...ndviData.map((d) => d.ndvi));
@@ -450,67 +501,142 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
 
     const yDomain: [number, number] = [yMin, yMax];
 
-    // Year-boundary vertical reference lines (Jan 1 of each year in range).
-    const verticalReferenceLines = useMemo<VerticalReferenceLineData[] | undefined>(() => {
-        if (chartData.length < 2) return undefined;
-        const minYear = new Date(chartData[0].x).getUTCFullYear();
-        const maxYear = new Date(chartData[chartData.length - 1].x).getUTCFullYear();
-        const lines: VerticalReferenceLineData[] = [];
-        for (let yr = minYear + 1; yr <= maxYear; yr++) {
-            lines.push({ x: Date.UTC(yr, 0, 1) } as VerticalReferenceLineData);
-        }
-        return lines.length > 0 ? lines : undefined;
+    // ── X-axis helpers ────────────────────────────────────────────────────────
+
+    /** Time span of the currently displayed data in months. */
+    const spanMonths = useMemo(() => {
+        if (chartData.length < 2) return 0;
+        const spanMs = chartData[chartData.length - 1].x - chartData[0].x;
+        return spanMs / (1000 * 60 * 60 * 24 * 30.44);
     }, [chartData]);
 
-    // Adaptive x-axis label: show "MMM yyyy" when the panel is wide enough to fit month labels.
+    /**
+     * Whether to show "MMM yyyy" month labels instead of year-only labels.
+     * True when the panel is wide enough to give each month ≥ MONTH_LABEL_THRESHOLD_PX.
+     */
     const showMonthLabels = useMemo(() => {
-        if (chartData.length < 2) return false;
-        const spanMs = chartData[chartData.length - 1].x - chartData[0].x;
-        const spanMonths = spanMs / (1000 * 60 * 60 * 24 * 30.44);
+        if (spanMonths <= 0) return false;
         const innerWidth = panelWidth - CHART_MARGIN_H;
-        return spanMonths > 0 && innerWidth / spanMonths >= MONTH_LABEL_THRESHOLD_PX;
-    }, [chartData, panelWidth]);
+        return innerWidth / spanMonths >= MONTH_LABEL_THRESHOLD_PX;
+    }, [spanMonths, panelWidth]);
 
-    // When showing year-only labels use the number of distinct years so each
-    // year appears at most once.  When showing month labels, cap the tick count
-    // so each label has at least 70 px — this prevents D3 from placing a tick
-    // every month even when the panel is wide.
-    const xTickCount = showMonthLabels
-        ? Math.min(8, Math.floor((panelWidth - 84) / 70)) // 84 = 24px padding + 60px margins
-        : chartData.length >= 2
-        ? new Date(chartData[chartData.length - 1].x).getUTCFullYear() -
-          new Date(chartData[0].x).getUTCFullYear() +
-          1
-        : 3;
+    /**
+     * Whether to show day-level tick marks on the x-axis.
+     * True when the panel gives each day ≥ DAY_TICK_THRESHOLD_PX pixels.
+     */
+    const showDayTicks = useMemo(() => {
+        if (spanMonths <= 0) return false;
+        const innerWidth = panelWidth - CHART_MARGIN_H;
+        const spanDays = spanMonths * 30.44;
+        return spanDays > 0 && innerWidth / spanDays >= DAY_TICK_THRESHOLD_PX;
+    }, [spanMonths, panelWidth]);
 
-    // Minor tick positions — one per month, skipping January (year boundaries
-    // which the library's axis already marks with a taller tick + year label).
-    // Used to draw small month tick marks on the x-axis via an SVG overlay.
+    /**
+     * Number of x-axis ticks.
+     * When showing month labels: capped by actual number of months so D3 won't
+     * repeat the same label twice.
+     * When showing year labels: one tick per year.
+     */
+    const xTickCount = useMemo(() => {
+        if (showMonthLabels) {
+            const pixelBased = Math.min(8, Math.floor((panelWidth - 84) / 70));
+            const monthCount = Math.max(1, Math.round(spanMonths));
+            return Math.min(pixelBased, monthCount);
+        }
+        if (chartData.length < 2) return 3;
+        return (
+            new Date(chartData[chartData.length - 1].x).getUTCFullYear() -
+            new Date(chartData[0].x).getUTCFullYear() +
+            1
+        );
+    }, [showMonthLabels, spanMonths, panelWidth, chartData]);
+
+    /**
+     * Vertical reference lines.
+     * - Zoomed out (year labels): one line per year boundary (Jan 1).
+     * - Zoomed in (month labels): one line per month boundary.
+     */
+    const verticalReferenceLines = useMemo<VerticalReferenceLineData[] | undefined>(() => {
+        if (chartData.length < 2) return undefined;
+        const minTime = chartData[0].x;
+        const maxTime = chartData[chartData.length - 1].x;
+        const lines: VerticalReferenceLineData[] = [];
+
+        if (showMonthLabels) {
+            // Month boundaries
+            const start = new Date(minTime);
+            const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+            while (d.getTime() <= maxTime) {
+                lines.push({ x: d.getTime() } as VerticalReferenceLineData);
+                d.setUTCMonth(d.getUTCMonth() + 1);
+            }
+        } else {
+            // Year boundaries
+            const minYear = new Date(minTime).getUTCFullYear();
+            const maxYear = new Date(maxTime).getUTCFullYear();
+            for (let yr = minYear + 1; yr <= maxYear; yr++) {
+                lines.push({ x: Date.UTC(yr, 0, 1) } as VerticalReferenceLineData);
+            }
+        }
+        return lines.length > 0 ? lines : undefined;
+    }, [chartData, showMonthLabels]);
+
+    /**
+     * Minor month tick positions (non-January boundaries) for SVG overlay.
+     * Only used when year labels are shown (not month labels — the library
+     * already provides fine ticks when showMonthLabels is true).
+     */
     const monthTickPositions = useMemo<number[]>(() => {
-        if (chartData.length < 2) return [];
+        if (chartData.length < 2 || showMonthLabels) return [];
         const minTime = chartData[0].x;
         const maxTime = chartData[chartData.length - 1].x;
         const ticks: number[] = [];
         const start = new Date(minTime);
-        // Advance to the first day of the next month after the data start.
         const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
         while (d.getTime() < maxTime) {
-            if (d.getUTCMonth() !== 0) { // skip Jan — the library marks year boundaries
-                ticks.push(d.getTime());
-            }
+            if (d.getUTCMonth() !== 0) ticks.push(d.getTime());
             d.setUTCMonth(d.getUTCMonth() + 1);
         }
         return ticks;
-    }, [chartData]);
+    }, [chartData, showMonthLabels]);
+
+    /**
+     * Day tick positions for SVG overlay — shown when very zoomed in.
+     * Skips the 1st of each month (those are already marked by month boundaries).
+     */
+    const dayTickPositions = useMemo<number[]>(() => {
+        if (!showDayTicks || chartData.length < 2) return [];
+        const minTime = chartData[0].x;
+        const maxTime = chartData[chartData.length - 1].x;
+        const ticks: number[] = [];
+        const d = new Date(minTime);
+        d.setUTCDate(d.getUTCDate() + 1);
+        d.setUTCHours(0, 0, 0, 0);
+        while (d.getTime() < maxTime) {
+            if (d.getUTCDate() !== 1) ticks.push(d.getTime());
+            d.setUTCDate(d.getUTCDate() + 1);
+        }
+        return ticks;
+    }, [showDayTicks, chartData]);
+
+    // ── Render helpers ────────────────────────────────────────────────────────
+
+    const aggModes: { key: AggMode; label: string; tooltip: string }[] = [
+        { key: 'raw',  label: 'Raw',  tooltip: 'Show individual Sentinel-2 observations' },
+        { key: 'mean', label: 'Mean', tooltip: 'Show monthly mean values' },
+        { key: 'min',  label: 'Min',  tooltip: 'Show monthly minimum values' },
+        { key: 'max',  label: 'Max',  tooltip: 'Show monthly maximum values' },
+    ];
+
+    const indexTooltips: Record<IndexType, string> = {
+        ndvi: 'Normalized Difference Vegetation Index',
+        evi:  'Enhanced Vegetation Index',
+        nbr:  'Normalized Burn Ratio',
+    };
+
+    const hasData = !isLoading && !error && chartData.length > 0;
 
     // ── Render ────────────────────────────────────────────────────────────────
-
-    const aggModes: { key: AggMode; label: string }[] = [
-        { key: 'raw',  label: 'Raw'  },
-        { key: 'mean', label: 'Mean' },
-        { key: 'min',  label: 'Min'  },
-        { key: 'max',  label: 'Max'  },
-    ];
 
     return (
         <>
@@ -538,7 +664,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
                     }}
                 >
-                    {/* Header */}
+                    {/* ── Header ── */}
                     <div
                         className="flex items-center justify-between px-3 py-2"
                         style={{ borderBottom: '1px solid var(--custom-light-blue-25)' }}
@@ -559,7 +685,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         </button>
                     </div>
 
-                    {/* Date range row */}
+                    {/* ── Date range row ── */}
                     <div className="flex items-center gap-2 px-3 py-2">
                         <label
                             className="text-xs"
@@ -576,7 +702,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 if (e.key === 'Enter' && location) {
                                     const newStart = e.currentTarget.value;
                                     setStartDate(newStart);
-                                    fetchData(location.lat, location.lon, newStart, endDate, indexType, showTrendLine);
+                                    fetchData(location.lat, location.lon, newStart, endDate, indexType, activeModel === 'linear');
                                 }
                             }}
                             style={{
@@ -604,7 +730,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 if (e.key === 'Enter' && location) {
                                     const newEnd = e.currentTarget.value;
                                     setEndDate(newEnd);
-                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType, showTrendLine);
+                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType, activeModel === 'linear');
                                 }
                             }}
                             style={{
@@ -624,7 +750,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 setStartDate(fullStart);
                                 setEndDate(fullEnd);
                                 if (location) {
-                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType, showTrendLine);
+                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType, activeModel === 'linear');
                                 }
                             }}
                             title="Reset to full Sentinel-2 time range (Jun 2015 – today)"
@@ -644,7 +770,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         {location && (
                             <button
                                 onClick={() =>
-                                    fetchData(location.lat, location.lon, startDate, endDate, indexType, showTrendLine)
+                                    fetchData(location.lat, location.lon, startDate, endDate, indexType, activeModel === 'linear')
                                 }
                                 disabled={isLoading}
                                 title="Refresh with new dates"
@@ -660,7 +786,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         )}
                     </div>
 
-                    {/* Index selector: NDVI / EVI / NBR */}
+                    {/* ── Index row — buttons left, coord + n= right ── */}
                     <div
                         className="flex items-center gap-2 px-3 pb-2"
                         style={{ borderBottom: '1px solid var(--custom-light-blue-25)' }}
@@ -671,32 +797,36 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         >
                             Index
                         </span>
-                        {(['ndvi', 'evi', 'nbr'] as IndexType[]).map((idx) => {
-                            const active = indexType === idx;
-                            return (
-                                <button
-                                    key={idx}
-                                    onClick={() => setIndexType(idx)}
-                                    style={{
-                                        fontSize: 11,
-                                        padding: '1px 10px',
-                                        borderRadius: 10,
-                                        border: active
-                                            ? '1px solid #05CB63'
-                                            : '1px solid var(--custom-light-blue-25)',
-                                        background: active ? 'rgba(5,203,99,0.15)' : 'transparent',
-                                        color: active ? '#05CB63' : 'var(--custom-light-blue-50)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                    }}
+                        {(['ndvi', 'evi', 'nbr'] as IndexType[]).map((idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => setIndexType(idx)}
+                                title={indexTooltips[idx]}
+                                style={pillStyle(indexType === idx, '#05CB63')}
+                            >
+                                {idx.toUpperCase()}
+                            </button>
+                        ))}
+                        {hasData && location && (
+                            <>
+                                <span
+                                    className="ml-auto"
+                                    style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
                                 >
-                                    {idx.toUpperCase()}
-                                </button>
-                            );
-                        })}
+                                    {location.lat.toFixed(4)}°{location.lat >= 0 ? 'N' : 'S'},{' '}
+                                    {location.lon.toFixed(4)}°{location.lon >= 0 ? 'E' : 'W'}
+                                </span>
+                                <span
+                                    style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
+                                    title="Total number of raw observations"
+                                >
+                                    n&nbsp;=&nbsp;{ndviData.length}
+                                </span>
+                            </>
+                        )}
                     </div>
 
-                    {/* Body */}
+                    {/* ── Body ── */}
                     <div className="px-3 pb-3">
                         {!location && (
                             <div
@@ -727,13 +857,13 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                     </div>
                                 )}
 
-                                {!isLoading && !error && chartData.length > 0 && (
+                                {hasData && (
                                     <>
-                                    {/* The library's VerticalReferenceLine groups sit above the
-                                        PointerEventsOverlay and steal mouse events, preventing
-                                        the data crosshair/tooltip from firing. Re-enable the
-                                        pointer-events:none that the library has commented out. */}
+                                    {/* Suppress pointer events on vertical reference line groups so the
+                                        D3 crosshair/tooltip continues to fire normally. */}
                                     <style>{`.vertical-reference-line-group { pointer-events: none !important; }`}</style>
+
+                                    {/* ── Chart ── */}
                                     <div
                                         style={{
                                             height: chartHeight,
@@ -752,7 +882,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                         <LineChartBasic
                                             data={chartData}
                                             showTooltip
-                                            stroke="#05CB63"
+                                            stroke={showData ? '#05CB63' : 'transparent'}
                                             strokeWidth={1.5}
                                             margin={{ bottom: 30, left: 45, right: 15, top: 10 }}
                                             yScaleOptions={{ domain: yDomain }}
@@ -767,54 +897,29 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             }}
                                             verticalReferenceLines={verticalReferenceLines}
                                         />
-                                        {/* Linear regression overlay — raw mode only, shown when toggled on and server returned data */}
-                                        {aggMode === 'raw' && showTrendLine && linearRegression && chartData.length >= 2 && (() => {
+
+                                        {/* SVG overlay — linear regression, harmonic curve, month ticks, day ticks */}
+                                        {(() => {
                                             const mLeft = 45, mRight = 15, mTop = 10, mBottom = 30;
-                                            // The chart container is inside `.px-3` (12px each side = 24px total),
-                                            // so the available width for the chart is panelWidth - 24.
                                             const containerW = panelWidth - 24;
                                             const innerW = containerW - mLeft - mRight;
                                             const innerH = chartHeight - mTop - mBottom;
-                                            const yToPixel = (v: number) =>
-                                                mTop + innerH - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * innerH;
-                                            return (
-                                                <svg
-                                                    style={{
-                                                        position: 'absolute',
-                                                        top: 0,
-                                                        left: 0,
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        pointerEvents: 'none',
-                                                        overflow: 'hidden',
-                                                    }}
-                                                >
-                                                    <line
-                                                        x1={mLeft}
-                                                        y1={yToPixel(linearRegression.y1)}
-                                                        x2={mLeft + innerW}
-                                                        y2={yToPixel(linearRegression.y2)}
-                                                        stroke="#FFB347"
-                                                        strokeWidth={1.5}
-                                                        strokeDasharray="5 4"
-                                                        opacity={0.85}
-                                                    />
-                                                </svg>
-                                            );
-                                        })()}
-
-                                        {/* Month minor ticks — small marks between the year ticks drawn by the library.
-                                            Only rendered when year labels are active (showMonthLabels = false);
-                                            when month text labels are shown, the library already provides fine ticks. */}
-                                        {!showMonthLabels && monthTickPositions.length > 0 && (() => {
-                                            const mLeft = 45, mRight = 15, mBottom = 30;
-                                            const containerW = panelWidth - 24;
-                                            const innerW = containerW - mLeft - mRight;
                                             const minTime = chartData[0].x;
                                             const maxTime = chartData[chartData.length - 1].x;
                                             const xToPixel = (t: number) =>
                                                 mLeft + ((t - minTime) / (maxTime - minTime)) * innerW;
+                                            const yToPixel = (v: number) =>
+                                                mTop + innerH - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * innerH;
                                             const axisY = chartHeight - mBottom;
+
+                                            const hasOverlay =
+                                                (activeModel === 'linear' && linearRegression) ||
+                                                (activeModel === 'harmonic' && harmonicFit) ||
+                                                monthTickPositions.length > 0 ||
+                                                dayTickPositions.length > 0;
+
+                                            if (!hasOverlay) return null;
+
                                             return (
                                                 <svg
                                                     style={{
@@ -827,19 +932,59 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                         overflow: 'hidden',
                                                     }}
                                                 >
-                                                    {monthTickPositions.map((t) => {
-                                                        const px = xToPixel(t);
-                                                        return (
-                                                            <line
-                                                                key={t}
-                                                                x1={px} y1={axisY}
-                                                                x2={px} y2={axisY + 3}
-                                                                stroke="var(--custom-light-blue-50)"
-                                                                strokeWidth={0.75}
-                                                                opacity={0.5}
-                                                            />
-                                                        );
-                                                    })}
+                                                    {/* Linear regression line */}
+                                                    {activeModel === 'linear' && linearRegression && (
+                                                        <line
+                                                            x1={mLeft}
+                                                            y1={yToPixel(linearRegression.y1)}
+                                                            x2={mLeft + innerW}
+                                                            y2={yToPixel(linearRegression.y2)}
+                                                            stroke="#FFB347"
+                                                            strokeWidth={1.5}
+                                                            strokeDasharray="5 4"
+                                                            opacity={0.85}
+                                                        />
+                                                    )}
+
+                                                    {/* Harmonic regression curve */}
+                                                    {activeModel === 'harmonic' && harmonicFit && (
+                                                        <path
+                                                            d={harmonicFit.curve
+                                                                .map((pt, i) =>
+                                                                    `${i === 0 ? 'M' : 'L'}${xToPixel(pt.x).toFixed(1)},${yToPixel(pt.y).toFixed(1)}`
+                                                                )
+                                                                .join(' ')}
+                                                            stroke="#4ECDC4"
+                                                            strokeWidth={1.5}
+                                                            strokeDasharray="5 4"
+                                                            fill="none"
+                                                            opacity={0.85}
+                                                        />
+                                                    )}
+
+                                                    {/* Month minor ticks (when showing year labels) */}
+                                                    {monthTickPositions.map((t) => (
+                                                        <line
+                                                            key={t}
+                                                            x1={xToPixel(t)} y1={axisY}
+                                                            x2={xToPixel(t)} y2={axisY + 3}
+                                                            stroke="var(--custom-light-blue-50)"
+                                                            strokeWidth={0.75}
+                                                            opacity={0.5}
+                                                        />
+                                                    ))}
+
+                                                    {/* Day minor ticks (when zoomed in far enough) */}
+                                                    {dayTickPositions.map((t) => (
+                                                        <line
+                                                            key={t}
+                                                            x1={xToPixel(t)} y1={axisY}
+                                                            x2={xToPixel(t)} y2={axisY + 2}
+                                                            stroke="var(--custom-light-blue-50)"
+                                                            strokeWidth={0.5}
+                                                            opacity={0.35}
+                                                        />
+                                                    ))}
                                                 </svg>
                                             );
                                         })()}
@@ -851,8 +996,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                     position: 'absolute',
                                                     left: 45 + Math.min(dragSel.startPx, dragSel.endPx),
                                                     width: Math.abs(dragSel.endPx - dragSel.startPx),
-                                                    top: 10,    // matches margin.top
-                                                    bottom: 30, // matches margin.bottom
+                                                    top: 10,
+                                                    bottom: 30,
                                                     background: 'rgba(5, 203, 99, 0.15)',
                                                     border: '1px solid rgba(5, 203, 99, 0.5)',
                                                     borderRadius: 2,
@@ -861,86 +1006,110 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             />
                                         )}
                                     </div>
-                                    </>
-                                )}
 
-                                {/* Aggregation mode toggles + observation count — below the chart */}
-                                {!isLoading && !error && chartData.length > 0 && (
-                                    <div className="flex items-center gap-2 pt-2">
-                                        {aggModes.map(({ key, label }) => {
-                                            const active = aggMode === key;
-                                            return (
-                                                <button
-                                                    key={key}
-                                                    onClick={() => setAggMode(key)}
-                                                    style={{
-                                                        fontSize: 11,
-                                                        padding: '1px 10px',
-                                                        borderRadius: 10,
-                                                        border: active
-                                                            ? '1px solid #05CB63'
-                                                            : '1px solid var(--custom-light-blue-25)',
-                                                        background: active ? 'rgba(5,203,99,0.15)' : 'transparent',
-                                                        color: active ? '#05CB63' : 'var(--custom-light-blue-50)',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s',
-                                                    }}
-                                                >
-                                                    {label}
-                                                </button>
-                                            );
-                                        })}
-                                        {aggMode === 'raw' && (
+                                    {/* Separator line below chart */}
+                                    <div style={{ marginTop: 10, borderTop: '1px solid var(--custom-light-blue-25)' }} />
+
+                                    {/* ── Data row: aggregation buttons + series stats ── */}
+                                    <div className="flex items-center gap-2 pt-2 flex-wrap">
+                                        <span
+                                            className="text-xs"
+                                            style={{ color: 'var(--custom-light-blue-50)', minWidth: 36 }}
+                                        >
+                                            Data
+                                        </span>
+                                        {aggModes.map(({ key, label, tooltip }) => (
                                             <button
+                                                key={key}
                                                 onClick={() => {
-                                                    const next = !showTrendLine;
-                                                    setShowTrendLine(next);
-                                                    // Only fetch when enabling AND we don't already have cached
-                                                    // regression data for the current location/dates/index.
-                                                    if (next && !linearRegression && location) {
-                                                        fetchData(location.lat, location.lon, startDate, endDate, indexType, true);
+                                                    if (aggMode === key && showData) {
+                                                        setShowData(false);
+                                                    } else {
+                                                        setAggMode(key);
+                                                        setShowData(true);
                                                     }
                                                 }}
-                                                title={showTrendLine ? 'Hide trend line' : 'Show trend line'}
-                                                style={{
-                                                    fontSize: 11,
-                                                    padding: '1px 10px',
-                                                    borderRadius: 10,
-                                                    border: showTrendLine
-                                                        ? '1px solid #FFB347'
-                                                        : '1px solid var(--custom-light-blue-25)',
-                                                    background: showTrendLine ? 'rgba(255,179,71,0.15)' : 'transparent',
-                                                    color: showTrendLine ? '#FFB347' : 'var(--custom-light-blue-50)',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.15s',
-                                                }}
+                                                title={aggMode === key && showData ? `${tooltip} — click to hide` : tooltip}
+                                                style={pillStyle(aggMode === key && showData, '#05CB63')}
                                             >
-                                                Trend
+                                                {label}
                                             </button>
-                                        )}
-                                        {/* Equation — shown when trend is active and API returned slope/intercept */}
-                                        {aggMode === 'raw' && showTrendLine && linearRegression?.slope !== undefined && (
+                                        ))}
+                                        {showData && dataStats && (
                                             <span
-                                                title="Linear regression equation (index per year)"
+                                                className="ml-auto"
+                                                style={{ fontSize: 11, color: 'var(--custom-light-blue-50)', whiteSpace: 'nowrap' }}
+                                                title="Min / Max / Range / Mean / Standard deviation of displayed series"
+                                            >
+                                                ↓{dataStats.min.toFixed(2)}&nbsp;↑{dataStats.max.toFixed(2)}&nbsp;·&nbsp;Δ{dataStats.range.toFixed(2)}&nbsp;·&nbsp;μ&nbsp;{dataStats.mean.toFixed(2)}&nbsp;·&nbsp;σ&nbsp;{dataStats.std.toFixed(2)}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* ── Model row: model buttons + model stats ── */}
+                                    <div className="flex items-center gap-2 pt-2 flex-wrap">
+                                        <span
+                                            className="text-xs"
+                                            style={{ color: 'var(--custom-light-blue-50)', minWidth: 36 }}
+                                        >
+                                            Model
+                                        </span>
+
+                                        {/* Linear button */}
+                                        <button
+                                            onClick={() => {
+                                                const next: ModelType = activeModel === 'linear' ? 'none' : 'linear';
+                                                setActiveModel(next);
+                                                if (next === 'linear' && !linearRegression && location) {
+                                                    fetchData(location.lat, location.lon, startDate, endDate, indexType, true);
+                                                }
+                                            }}
+                                            title={activeModel === 'linear' ? 'Hide linear trend line' : 'Fit linear regression on raw observations'}
+                                            style={pillStyle(activeModel === 'linear', '#FFB347')}
+                                        >
+                                            Linear
+                                        </button>
+
+                                        {/* Harmonic button */}
+                                        <button
+                                            onClick={() => {
+                                                const next: ModelType = activeModel === 'harmonic' ? 'none' : 'harmonic';
+                                                setActiveModel(next);
+                                            }}
+                                            title={activeModel === 'harmonic' ? 'Hide harmonic model' : 'Fit harmonic regression on raw observations (annual + semi-annual cycles)'}
+                                            style={pillStyle(activeModel === 'harmonic', '#4ECDC4')}
+                                        >
+                                            Harmonic
+                                        </button>
+
+                                        {/* Linear stats */}
+                                        {activeModel === 'linear' && linearRegression?.slope !== undefined && (
+                                            <span
+                                                className="ml-auto"
+                                                title="Linear regression equation and RMSE"
                                                 style={{ fontSize: 11, color: '#FFB347', fontStyle: 'italic', whiteSpace: 'nowrap' }}
                                             >
                                                 y&nbsp;=&nbsp;{linearRegression.slope.toFixed(3)}x&nbsp;{linearRegression.intercept! >= 0 ? '+' : '−'}&nbsp;{Math.abs(linearRegression.intercept!).toFixed(3)}
+                                                {linearRMSE !== null && (
+                                                    <span style={{ fontStyle: 'normal' }}>
+                                                        &nbsp;·&nbsp;RMSE&nbsp;{linearRMSE.toFixed(3)}
+                                                    </span>
+                                                )}
                                             </span>
                                         )}
-                                        <span
-                                            className="ml-auto"
-                                            style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
-                                        >
-                                            {location.lat.toFixed(4)}°{location.lat >= 0 ? 'N' : 'S'},{' '}
-                                            {location.lon.toFixed(4)}°{location.lon >= 0 ? 'E' : 'W'}
-                                        </span>
-                                        <span
-                                            style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
-                                            title="Total number of observations"
-                                        >
-                                            n&nbsp;=&nbsp;{ndviData.length}
-                                        </span>
+
+                                        {/* Harmonic stats */}
+                                        {activeModel === 'harmonic' && harmonicFit && (
+                                            <span
+                                                className="ml-auto"
+                                                title="Harmonic model goodness-of-fit"
+                                                style={{ fontSize: 11, color: '#4ECDC4', whiteSpace: 'nowrap' }}
+                                            >
+                                                R²&nbsp;{harmonicFit.r2.toFixed(3)}&nbsp;·&nbsp;RMSE&nbsp;{harmonicFit.rmse.toFixed(3)}
+                                            </span>
+                                        )}
                                     </div>
+                                    </>
                                 )}
                             </>
                         )}
@@ -978,7 +1147,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                             paddingBottom: 2,
                         }}
                     >
-                        {/* Visual grip dots */}
                         <svg width="10" height="10" viewBox="0 0 10 10" style={{ opacity: 0.35 }}>
                             <circle cx="8" cy="8" r="1.2" fill="currentColor" />
                             <circle cx="5" cy="8" r="1.2" fill="currentColor" />
