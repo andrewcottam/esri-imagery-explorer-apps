@@ -13,132 +13,38 @@
  * limitations under the License.
  */
 
-import {
-    showMapLabelToggled,
-    showTerrainToggled,
-    showBasemapToggled,
-} from '@shared/store/Map/reducer';
-import {
-    selectShowMapLabel,
-    selectShowTerrain,
-    selectShowBasemap,
-} from '@shared/store/Map/selectors';
-// import { selectAnimationStatus } from '@shared/store/UI/selectors';
-import classNames from 'classnames';
 import React, { FC } from 'react';
 import { useAppDispatch } from '@shared/store/configureStore';
-import { useAppSelector } from '@shared/store/configureStore';
 import { useTranslation } from 'react-i18next';
 import { FirebaseAuthButton } from '@shared/components/FirebaseAuthButton/FirebaseAuthButton';
-
-type ToggleButtonProps = {
-    label: string;
-    active: boolean;
-    onToggle: () => void;
-};
-
-const CheckIcon = (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 16 16"
-        height="16"
-        width="16"
-    >
-        <path
-            fill="currentColor"
-            d="M14.071 15a.929.929 0 0 0 .929-.929V2.93a.929.929 0 0 0-.929-.93H2.93a.929.929 0 0 0-.93.929V14.07a.929.929 0 0 0 .929.929zM3 3h11v11H3zm9.262 2l.738.738-5.443 5.43-2.822-2.822.738-.738 2.084 2.088z"
-        />
-        <path fill="none" d="M0 0h16v16H0z" />
-    </svg>
-);
-
-const UncheckIcon = (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 16 16"
-        height="16"
-        width="16"
-    >
-        <path
-            fill="currentColor"
-            d="M14.071 15a.929.929 0 0 0 .929-.929V2.93a.929.929 0 0 0-.929-.93H2.93a.929.929 0 0 0-.93.929V14.07a.929.929 0 0 0 .929.929zM3 3h11v11H3z"
-        />
-        <path fill="none" d="M0 0h16v16H0z" />
-    </svg>
-);
-
-const ToggleButton: FC<ToggleButtonProps> = ({
-    label,
-    active,
-    onToggle,
-}: ToggleButtonProps) => {
-    return (
-        <div
-            className="mx-2 my-1 md:my-0 cursor-pointer z-10 flex items-center"
-            onClick={onToggle}
-        >
-            {active ? CheckIcon : UncheckIcon}
-            <span className="ml-1">{label}</span>
-        </div>
-    );
-};
-
-// type Props = {
-//     shoudHide: boolean;
-// };
+import { shouldShowAboutThisAppToggled } from '@shared/store/UI/reducer';
 
 export const ReferenceLayersToggleControl: FC = () => {
     const dispatch = useAppDispatch();
 
-    const showMapLabel = useAppSelector(selectShowMapLabel);
-
-    const showTerrain = useAppSelector(selectShowTerrain);
-
-    const showBasemap = useAppSelector(selectShowBasemap);
-
     const { t } = useTranslation();
 
     return (
-        <div
-            // className={classNames(
-            //     'absolute bg-custom-background flex py-2 px-1 text-custom-light-blue text-xs top-map-ui-top-position',
-            //     // {
-            //     //     hidden: shoudHide,
-            //     // }
-            // )}
-            // style={{
-            //     right: 15, // this is the margin to right value of JSAPI search Widget
-            // }}
-            className="md:flex relative py-2 theme-background"
-        >
-            <ToggleButton
-                label={t('map_labels')}
-                active={showMapLabel}
-                onToggle={() => {
-                    // console.log('toggle map labels');
-                    dispatch(showMapLabelToggled());
-                }}
-            />
-
-            <ToggleButton
-                label={t('terrain')}
-                active={showTerrain}
-                onToggle={() => {
-                    // console.log('toggle Terrain');
-                    dispatch(showTerrainToggled());
-                }}
-            />
-
-            <ToggleButton
-                label={t('basemap')}
-                active={showBasemap}
-                onToggle={() => {
-                    // console.log('toggle Terrain');
-                    dispatch(showBasemapToggled());
-                }}
-            />
-
+        <div className="md:flex relative py-2 theme-background">
             <FirebaseAuthButton />
+            <div
+                className="mx-2 my-1 md:my-0 cursor-pointer z-10 flex items-center"
+                onClick={() => dispatch(shouldShowAboutThisAppToggled())}
+                title={t('about_this_app')}
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    height="20"
+                    width="20"
+                >
+                    <path
+                        fill="currentColor"
+                        d="M12.5 7.5a1 1 0 1 1 1-1 1.002 1.002 0 0 1-1 1zM13 18V9h-2v1h1v8h-1v1h3v-1zm9.8-5.5A10.3 10.3 0 1 1 12.5 2.2a10.297 10.297 0 0 1 10.3 10.3zm-1 0a9.3 9.3 0 1 0-9.3 9.3 9.31 9.31 0 0 0 9.3-9.3z"
+                    />
+                    <path fill="none" d="M0 0h24v24H0z" />
+                </svg>
+            </div>
         </div>
     );
 };

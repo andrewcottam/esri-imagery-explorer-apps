@@ -16,6 +16,7 @@
 import React, { useRef, useEffect } from 'react';
 import MapView from '@arcgis/core/views/MapView';
 import BasemapGallery from '@arcgis/core/widgets/BasemapGallery';
+import PortalBasemapsSource from '@arcgis/core/widgets/BasemapGallery/support/PortalBasemapsSource';
 import classNames from 'classnames';
 
 type Props = {
@@ -32,9 +33,15 @@ const BasemapGalleryWidget: React.FC<Props> = ({ mapView, hide }) => {
             return;
         }
 
-        // Create the BasemapGallery widget
+        // Create the BasemapGallery widget, filtering out GB Backgrounds basemaps
+        const source = new PortalBasemapsSource({
+            filterFunction: (basemap) =>
+                !basemap.title.includes('GB Backgrounds'),
+        });
+
         widgetRef.current = new BasemapGallery({
             view: mapView,
+            source,
             container: containerRef.current,
         });
 

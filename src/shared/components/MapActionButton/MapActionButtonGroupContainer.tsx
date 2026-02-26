@@ -64,8 +64,6 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
             />
             <ZoomToExtent mapView={mapView} serviceUrl={serviceUrl} />
 
-            <div className="h-[1px] my-[5px] w-map-action-button-size bg-custom-background"></div>
-
             <AddBookmarkButton mapView={mapView} />
             <MapillaryControl mapView={mapView} />
             <NDVITimeSeriesControl mapView={mapView} />
