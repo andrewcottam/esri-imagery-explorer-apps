@@ -2,15 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "landsat",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:landsat"],
-      "port": 8080
-    },
-    {
       "name": "sentinel2",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start:sentinel2"],
+      "port": 8080
+    },
+    {
+      "name": "landsat",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:landsat"],
       "port": 8080
     },
     {

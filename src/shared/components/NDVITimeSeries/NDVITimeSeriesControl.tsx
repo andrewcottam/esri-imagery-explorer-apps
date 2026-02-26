@@ -168,7 +168,25 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [location, setLocation] = useState<ClickedLocation | null>(null);
     const [ndviData, setNdviData] = useState<NDVIDataPoint[]>([]);
-    const [linearRegression, setLinearRegression] = useState<LinearRegression | null>(null);
+    // Compute linear regression client-side from raw observations using OLS
+    const linearRegression = useMemo<LinearRegression | null>(() => {
+        const rawData = ndviToChartData(ndviData);
+        if (rawData.length < 2) return null;
+        const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+        const firstX = rawData[0].x;
+        const n = rawData.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (const pt of rawData) {
+            const t = (pt.x - firstX) / MS_PER_YEAR;
+            sumX += t; sumY += pt.y; sumXY += t * pt.y; sumX2 += t * t;
+        }
+        const denom = n * sumX2 - sumX * sumX;
+        if (Math.abs(denom) < 1e-12) return null;
+        const slope = (n * sumXY - sumX * sumY) / denom;
+        const intercept = (sumY - slope * sumX) / n;
+        const spanYears = (rawData[rawData.length - 1].x - firstX) / MS_PER_YEAR;
+        return { y1: intercept, y2: intercept + slope * spanYears, slope, intercept };
+    }, [ndviData]);
     const [activeModel, setActiveModel] = useState<ModelType>('none');
     const [startDate, setStartDate] = useState(getDefaultStartDate);
     const [endDate, setEndDate] = useState(getDefaultEndDate);
@@ -239,17 +257,15 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             lon: number,
             start: string,
             end: string,
-            index: IndexType = 'ndvi',
-            includeLinearRegression = false
+            index: IndexType = 'ndvi'
         ) => {
             if (abortControllerRef.current) abortControllerRef.current.abort();
             abortControllerRef.current = new AbortController();
             setIsLoading(true);
             setError(null);
             try {
-                const result = await fetchNDVITimeSeries(lat, lon, start, end, index, includeLinearRegression);
+                const result = await fetchNDVITimeSeries(lat, lon, start, end, index);
                 setNdviData(result.data);
-                setLinearRegression(result.linearRegression ?? null);
                 if (result.data.length === 0)
                     setError('No data returned for this location and date range.');
             } catch (err: any) {
@@ -279,7 +295,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             const lon = Math.round(longitude * 1e6) / 1e6;
             setLocation({ lat, lon });
             showPointOnMap(lat, lon);
-            fetchData(lat, lon, startDate, endDate, indexType, activeModelRef.current === 'linear');
+            fetchData(lat, lon, startDate, endDate, indexType);
         });
         return () => {
             clickHandlerRef.current?.remove();
@@ -298,7 +314,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             }
             setLocation(null);
             setNdviData([]);
-            setLinearRegression(null);
             setActiveModel('none');
             setError(null);
         }
@@ -310,7 +325,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         if (prevIndexRef.current === indexType) return;
         prevIndexRef.current = indexType;
         if (location && isActive) {
-            fetchData(location.lat, location.lon, startDate, endDate, indexType, activeModelRef.current === 'linear');
+            fetchData(location.lat, location.lon, startDate, endDate, indexType);
         }
     }, [indexType, location, isActive, startDate, endDate, fetchData]);
 
@@ -474,7 +489,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                 setStartDate(newStart);
                 setEndDate(newEnd);
                 if (location) {
-                    fetchData(location.lat, location.lon, newStart, newEnd, indexType, activeModelRef.current === 'linear');
+                    fetchData(location.lat, location.lon, newStart, newEnd, indexType);
                 }
             };
 
@@ -702,7 +717,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 if (e.key === 'Enter' && location) {
                                     const newStart = e.currentTarget.value;
                                     setStartDate(newStart);
-                                    fetchData(location.lat, location.lon, newStart, endDate, indexType, activeModel === 'linear');
+                                    fetchData(location.lat, location.lon, newStart, endDate, indexType);
                                 }
                             }}
                             style={{
@@ -730,7 +745,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 if (e.key === 'Enter' && location) {
                                     const newEnd = e.currentTarget.value;
                                     setEndDate(newEnd);
-                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType, activeModel === 'linear');
+                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType);
                                 }
                             }}
                             style={{
@@ -750,7 +765,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 setStartDate(fullStart);
                                 setEndDate(fullEnd);
                                 if (location) {
-                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType, activeModel === 'linear');
+                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType);
                                 }
                             }}
                             title="Reset to full Sentinel-2 time range (Jun 2015 – today)"
@@ -770,7 +785,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         {location && (
                             <button
                                 onClick={() =>
-                                    fetchData(location.lat, location.lon, startDate, endDate, indexType, activeModel === 'linear')
+                                    fetchData(location.lat, location.lon, startDate, endDate, indexType)
                                 }
                                 disabled={isLoading}
                                 title="Refresh with new dates"
@@ -869,6 +884,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             height: chartHeight,
                                             position: 'relative',
                                             cursor: 'crosshair',
+                                            marginTop: 7,
                                             '--axis-tick-line-color': 'var(--custom-light-blue-50)',
                                             '--axis-tick-text-color': 'var(--custom-light-blue-50)',
                                             '--crosshair-reference-line-color': 'var(--custom-light-blue-50)',
@@ -1060,9 +1076,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             onClick={() => {
                                                 const next: ModelType = activeModel === 'linear' ? 'none' : 'linear';
                                                 setActiveModel(next);
-                                                if (next === 'linear' && !linearRegression && location) {
-                                                    fetchData(location.lat, location.lon, startDate, endDate, indexType, true);
-                                                }
                                             }}
                                             title={activeModel === 'linear' ? 'Hide linear trend line' : 'Fit linear regression on raw observations'}
                                             style={pillStyle(activeModel === 'linear', '#FFB347')}
