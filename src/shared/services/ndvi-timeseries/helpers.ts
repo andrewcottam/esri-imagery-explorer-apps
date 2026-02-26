@@ -27,8 +27,16 @@ export type NDVIDataPoint = {
 /**
  * Normalised linear regression endpoints for the time series.
  * y1 is the fitted value at the first data point; y2 at the last.
+ * slope (per year) and intercept are included when the API returns coefficients.
  */
-export type LinearRegression = { y1: number; y2: number };
+export type LinearRegression = {
+    y1: number;
+    y2: number;
+    /** Trend slope in index-units per year (optional — only set when API returns slope/intercept). */
+    slope?: number;
+    /** Intercept (y-value at the first data point date). */
+    intercept?: number;
+};
 
 export type NDVITimeSeriesResult = {
     data: NDVIDataPoint[];
@@ -109,6 +117,8 @@ export const fetchNDVITimeSeries = async (
                 linearRegression = {
                     y1: Number(lr.intercept),
                     y2: Number(lr.slope) * yearsSpan + Number(lr.intercept),
+                    slope: Number(lr.slope),
+                    intercept: Number(lr.intercept),
                 };
             }
         }

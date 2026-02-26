@@ -35,6 +35,22 @@ import {
     LinearRegression,
 } from '@shared/services/ndvi-timeseries/helpers';
 import { formatInUTCTimeZone } from '@shared/utils/date-time/formatInUTCTimeZone';
+import {
+    useAppDispatch,
+    useAppSelector,
+} from '@shared/store/configureStore';
+import {
+    modeChanged,
+    shouldForceSceneReselectionUpdated,
+} from '@shared/store/ImageryScene/reducer';
+import {
+    updateAcquisitionDate,
+    updateRasterFunctionName,
+} from '@shared/store/ImageryScene/thunks';
+import { selectQueryParams4SceneInSelectedMode } from '@shared/store/ImageryScene/selectors';
+
+/** Default Sentinel-2 renderer used when none is currently selected. */
+const DEFAULT_RASTER_FUNCTION = 'Natural Color for Visualization';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,8 +73,11 @@ const MIN_CHART_HEIGHT = 100;
 const MAX_CHART_HEIGHT = 600;
 const DEFAULT_CHART_HEIGHT = 200;
 
-/** Pixels-per-month threshold above which month labels are shown on the x-axis. */
-const MONTH_LABEL_THRESHOLD_PX = 22;
+/**
+ * Pixels-per-month threshold above which month labels are shown on the x-axis.
+ * "MMM yyyy" needs at least ~55 px to avoid overlap.
+ */
+const MONTH_LABEL_THRESHOLD_PX = 55;
 
 /** Chart left+right margins (determines inner drawing width from panel width). */
 const CHART_MARGIN_H = 60; // left 45 + right 15
@@ -165,6 +184,14 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     // current value without needing to be re-registered when the toggle changes.
     const showTrendLineRef = useRef(showTrendLine);
     showTrendLineRef.current = showTrendLine;
+
+    // Redux integration — used to load a Sentinel-2 scene when the user clicks
+    // on a data point in the time-series chart.
+    const dispatch = useAppDispatch();
+    const queryParams = useAppSelector(selectQueryParams4SceneInSelectedMode);
+    // Stable ref so the drag-handler closure always reads the latest value.
+    const queryParamsRef = useRef(queryParams);
+    queryParamsRef.current = queryParams;
 
     // ── Map marker ────────────────────────────────────────────────────────────
 
@@ -347,7 +374,40 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                 const endPx = clamp(ev.clientX - rect.left - 45);
                 setDragSel(null);
 
-                if (Math.abs(endPx - startPx) < 5) return; // treat as a plain click
+                if (Math.abs(endPx - startPx) < 5) {
+                    // Plain click → find the closest data point and load that
+                    // Sentinel-2 scene, switching to "find a scene" mode.
+                    const minTime = chartData[0].x;
+                    const maxTime = chartData[chartData.length - 1].x;
+                    const clickTime =
+                        minTime + (startPx / innerW) * (maxTime - minTime);
+                    const closest = chartData.reduce((prev, curr) =>
+                        Math.abs(curr.x - clickTime) <
+                        Math.abs(prev.x - clickTime)
+                            ? curr
+                            : prev
+                    );
+                    // Convert timestamp → YYYY-MM-DD (data dates are UTC midnight)
+                    const clickedDate = new Date(closest.x)
+                        .toISOString()
+                        .substring(0, 10);
+
+                    // Switch to "find a scene" so the Calendar + year selector
+                    // react to the date, and the imagery layer renders the scene.
+                    dispatch(modeChanged('find a scene'));
+                    // Fall back to Natural Color if no renderer is selected yet.
+                    if (!queryParamsRef.current?.rasterFunctionName) {
+                        dispatch(
+                            updateRasterFunctionName(DEFAULT_RASTER_FUNCTION)
+                        );
+                    }
+                    // Force scene re-selection so useFindSelectedSceneByDate
+                    // doesn't skip the update when a scene is already locked.
+                    dispatch(shouldForceSceneReselectionUpdated(true));
+                    // Set the acquisition date and sync the year selector.
+                    dispatch(updateAcquisitionDate(clickedDate, true));
+                    return;
+                }
 
                 const minPx = Math.min(startPx, endPx);
                 const maxPx = Math.max(startPx, endPx);
@@ -371,7 +431,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         },
-        [chartData, location, indexType, fetchData]
+        [chartData, location, indexType, fetchData, dispatch]
     );
 
     // Dynamic y-axis — extend below -0.2 or above 1 when the data warrants it
@@ -412,14 +472,36 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     }, [chartData, panelWidth]);
 
     // When showing year-only labels use the number of distinct years so each
-    // year appears at most once.  When showing month labels count the months.
+    // year appears at most once.  When showing month labels, cap the tick count
+    // so each label has at least 70 px — this prevents D3 from placing a tick
+    // every month even when the panel is wide.
     const xTickCount = showMonthLabels
-        ? Math.min(14, Math.round((chartData[chartData.length - 1]?.x - chartData[0]?.x) / (1000 * 60 * 60 * 24 * 30.44)))
+        ? Math.min(8, Math.floor((panelWidth - 84) / 70)) // 84 = 24px padding + 60px margins
         : chartData.length >= 2
         ? new Date(chartData[chartData.length - 1].x).getUTCFullYear() -
           new Date(chartData[0].x).getUTCFullYear() +
           1
         : 3;
+
+    // Minor tick positions — one per month, skipping January (year boundaries
+    // which the library's axis already marks with a taller tick + year label).
+    // Used to draw small month tick marks on the x-axis via an SVG overlay.
+    const monthTickPositions = useMemo<number[]>(() => {
+        if (chartData.length < 2) return [];
+        const minTime = chartData[0].x;
+        const maxTime = chartData[chartData.length - 1].x;
+        const ticks: number[] = [];
+        const start = new Date(minTime);
+        // Advance to the first day of the next month after the data start.
+        const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+        while (d.getTime() < maxTime) {
+            if (d.getUTCMonth() !== 0) { // skip Jan — the library marks year boundaries
+                ticks.push(d.getTime());
+            }
+            d.setUTCMonth(d.getUTCMonth() + 1);
+        }
+        return ticks;
+    }, [chartData]);
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -688,7 +770,10 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                         {/* Linear regression overlay — raw mode only, shown when toggled on and server returned data */}
                                         {aggMode === 'raw' && showTrendLine && linearRegression && chartData.length >= 2 && (() => {
                                             const mLeft = 45, mRight = 15, mTop = 10, mBottom = 30;
-                                            const innerW = panelWidth - mLeft - mRight;
+                                            // The chart container is inside `.px-3` (12px each side = 24px total),
+                                            // so the available width for the chart is panelWidth - 24.
+                                            const containerW = panelWidth - 24;
+                                            const innerW = containerW - mLeft - mRight;
                                             const innerH = chartHeight - mTop - mBottom;
                                             const yToPixel = (v: number) =>
                                                 mTop + innerH - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * innerH;
@@ -701,7 +786,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                         width: '100%',
                                                         height: '100%',
                                                         pointerEvents: 'none',
-                                                        overflow: 'visible',
+                                                        overflow: 'hidden',
                                                     }}
                                                 >
                                                     <line
@@ -714,6 +799,47 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                         strokeDasharray="5 4"
                                                         opacity={0.85}
                                                     />
+                                                </svg>
+                                            );
+                                        })()}
+
+                                        {/* Month minor ticks — small marks between the year ticks drawn by the library.
+                                            Only rendered when year labels are active (showMonthLabels = false);
+                                            when month text labels are shown, the library already provides fine ticks. */}
+                                        {!showMonthLabels && monthTickPositions.length > 0 && (() => {
+                                            const mLeft = 45, mRight = 15, mBottom = 30;
+                                            const containerW = panelWidth - 24;
+                                            const innerW = containerW - mLeft - mRight;
+                                            const minTime = chartData[0].x;
+                                            const maxTime = chartData[chartData.length - 1].x;
+                                            const xToPixel = (t: number) =>
+                                                mLeft + ((t - minTime) / (maxTime - minTime)) * innerW;
+                                            const axisY = chartHeight - mBottom;
+                                            return (
+                                                <svg
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        pointerEvents: 'none',
+                                                        overflow: 'hidden',
+                                                    }}
+                                                >
+                                                    {monthTickPositions.map((t) => {
+                                                        const px = xToPixel(t);
+                                                        return (
+                                                            <line
+                                                                key={t}
+                                                                x1={px} y1={axisY}
+                                                                x2={px} y2={axisY + 3}
+                                                                stroke="var(--custom-light-blue-50)"
+                                                                strokeWidth={0.75}
+                                                                opacity={0.5}
+                                                            />
+                                                        );
+                                                    })}
                                                 </svg>
                                             );
                                         })()}
@@ -769,10 +895,9 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                 onClick={() => {
                                                     const next = !showTrendLine;
                                                     setShowTrendLine(next);
-                                                    // When enabling: re-fetch with linear_regression=true so the
-                                                    // server returns regression data (clear any stale result first).
-                                                    if (next && location) {
-                                                        setLinearRegression(null);
+                                                    // Only fetch when enabling AND we don't already have cached
+                                                    // regression data for the current location/dates/index.
+                                                    if (next && !linearRegression && location) {
                                                         fetchData(location.lat, location.lon, startDate, endDate, indexType, true);
                                                     }
                                                 }}
@@ -792,6 +917,15 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             >
                                                 Trend
                                             </button>
+                                        )}
+                                        {/* Equation — shown when trend is active and API returned slope/intercept */}
+                                        {aggMode === 'raw' && showTrendLine && linearRegression?.slope !== undefined && (
+                                            <span
+                                                title="Linear regression equation (index per year)"
+                                                style={{ fontSize: 11, color: '#FFB347', fontStyle: 'italic', whiteSpace: 'nowrap' }}
+                                            >
+                                                y&nbsp;=&nbsp;{linearRegression.slope.toFixed(3)}x&nbsp;{linearRegression.intercept! >= 0 ? '+' : '−'}&nbsp;{Math.abs(linearRegression.intercept!).toFixed(3)}
+                                            </span>
                                         )}
                                         <span
                                             className="ml-auto"
