@@ -25,6 +25,17 @@ export type NDVIDataPoint = {
 };
 
 /**
+ * Normalised linear regression endpoints for the time series.
+ * y1 is the fitted value at the first data point; y2 at the last.
+ */
+export type LinearRegression = { y1: number; y2: number };
+
+export type NDVITimeSeriesResult = {
+    data: NDVIDataPoint[];
+    linearRegression?: LinearRegression;
+};
+
+/**
  * Fetch NDVI time series from the cloud function endpoint.
  * @param lat - Latitude of the point
  * @param lon - Longitude of the point
@@ -36,8 +47,9 @@ export const fetchNDVITimeSeries = async (
     lon: number,
     startDate: string,
     endDate: string,
-    index: IndexType = 'ndvi'
-): Promise<NDVIDataPoint[]> => {
+    index: IndexType = 'ndvi',
+    includeLinearRegression = false
+): Promise<NDVITimeSeriesResult> => {
     const response = await fetch(NDVI_TIMESERIES_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,6 +59,7 @@ export const fetchNDVITimeSeries = async (
             start_date: startDate,
             end_date: endDate,
             index,
+            ...(includeLinearRegression && { linear_regression: true }),
         }),
     });
 
@@ -67,10 +80,41 @@ export const fetchNDVITimeSeries = async (
     // Normalise to NDVIDataPoint[] regardless of response envelope
     const items: unknown[] = Array.isArray(raw) ? raw : raw?.timeseries ?? raw?.data ?? raw?.results ?? [];
 
-    return items.map((item: any) => ({
+    const data: NDVIDataPoint[] = items.map((item: any) => ({
         date: item.date ?? item.timestamp ?? item.time ?? '',
         ndvi: Number(item.index ?? item.ndvi ?? item.value ?? item.ndvi_value ?? 0),
     }));
+
+    // Extract and normalise linear_regression if present.
+    // Accepted API formats:
+    //   [y_start, y_end]                     — two endpoint y-values
+    //   { y1, y2 }                           — named endpoint y-values
+    //   { slope, intercept }                 — coefficients where x = years since first data point
+    let linearRegression: LinearRegression | undefined;
+    const lr = !Array.isArray(raw) ? raw?.linear_regression : undefined;
+    if (lr != null) {
+        if (Array.isArray(lr) && lr.length >= 2) {
+            linearRegression = { y1: Number(lr[0]), y2: Number(lr[1]) };
+        } else if (typeof lr === 'object') {
+            if ('y1' in lr && 'y2' in lr) {
+                linearRegression = { y1: Number(lr.y1), y2: Number(lr.y2) };
+            } else if ('slope' in lr && 'intercept' in lr) {
+                // slope is per year; compute the time span in years between the
+                // first and last data points so the line endpoints map correctly
+                // onto the chart's x-axis (first data point → last data point).
+                const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+                const firstMs = data.length > 0 ? new Date(data[0].date).getTime() : 0;
+                const lastMs  = data.length > 0 ? new Date(data[data.length - 1].date).getTime() : 0;
+                const yearsSpan = (lastMs - firstMs) / MS_PER_YEAR;
+                linearRegression = {
+                    y1: Number(lr.intercept),
+                    y2: Number(lr.slope) * yearsSpan + Number(lr.intercept),
+                };
+            }
+        }
+    }
+
+    return { data, linearRegression };
 };
 
 /**

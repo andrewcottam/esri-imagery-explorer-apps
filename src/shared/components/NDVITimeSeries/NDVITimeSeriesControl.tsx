@@ -32,6 +32,7 @@ import {
     getDefaultEndDate,
     NDVIDataPoint,
     IndexType,
+    LinearRegression,
 } from '@shared/services/ndvi-timeseries/helpers';
 import { formatInUTCTimeZone } from '@shared/utils/date-time/formatInUTCTimeZone';
 
@@ -141,6 +142,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [location, setLocation] = useState<ClickedLocation | null>(null);
     const [ndviData, setNdviData] = useState<NDVIDataPoint[]>([]);
+    const [linearRegression, setLinearRegression] = useState<LinearRegression | null>(null);
+    const [showTrendLine, setShowTrendLine] = useState(false);
     const [startDate, setStartDate] = useState(getDefaultStartDate);
     const [endDate, setEndDate] = useState(getDefaultEndDate);
     const [error, setError] = useState<string | null>(null);
@@ -157,6 +160,11 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     // Stable ref so resize callbacks never need to be re-created when size changes.
     const sizeRef = useRef({ width: DEFAULT_PANEL_WIDTH, height: DEFAULT_CHART_HEIGHT });
     sizeRef.current = { width: panelWidth, height: chartHeight };
+
+    // Stable ref for showTrendLine so the map-click handler always reads the
+    // current value without needing to be re-registered when the toggle changes.
+    const showTrendLineRef = useRef(showTrendLine);
+    showTrendLineRef.current = showTrendLine;
 
     // ── Map marker ────────────────────────────────────────────────────────────
 
@@ -191,15 +199,23 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     // ── Data fetching ─────────────────────────────────────────────────────────
 
     const fetchData = useCallback(
-        async (lat: number, lon: number, start: string, end: string, index: IndexType = 'ndvi') => {
+        async (
+            lat: number,
+            lon: number,
+            start: string,
+            end: string,
+            index: IndexType = 'ndvi',
+            includeLinearRegression = false
+        ) => {
             if (abortControllerRef.current) abortControllerRef.current.abort();
             abortControllerRef.current = new AbortController();
             setIsLoading(true);
             setError(null);
             try {
-                const data = await fetchNDVITimeSeries(lat, lon, start, end, index);
-                setNdviData(data);
-                if (data.length === 0)
+                const result = await fetchNDVITimeSeries(lat, lon, start, end, index, includeLinearRegression);
+                setNdviData(result.data);
+                setLinearRegression(result.linearRegression ?? null);
+                if (result.data.length === 0)
                     setError('No data returned for this location and date range.');
             } catch (err: any) {
                 if (err.name !== 'AbortError') {
@@ -228,7 +244,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             const lon = Math.round(longitude * 1e6) / 1e6;
             setLocation({ lat, lon });
             showPointOnMap(lat, lon);
-            fetchData(lat, lon, startDate, endDate, indexType);
+            fetchData(lat, lon, startDate, endDate, indexType, showTrendLineRef.current);
         });
         return () => {
             clickHandlerRef.current?.remove();
@@ -247,6 +263,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             }
             setLocation(null);
             setNdviData([]);
+            setLinearRegression(null);
             setError(null);
         }
     }, [isActive, mapView]);
@@ -257,7 +274,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         if (prevIndexRef.current === indexType) return;
         prevIndexRef.current = indexType;
         if (location && isActive) {
-            fetchData(location.lat, location.lon, startDate, endDate, indexType);
+            fetchData(location.lat, location.lon, startDate, endDate, indexType, showTrendLineRef.current);
         }
     }, [indexType, location, isActive, startDate, endDate, fetchData]);
 
@@ -346,7 +363,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                 setStartDate(newStart);
                 setEndDate(newEnd);
                 if (location) {
-                    fetchData(location.lat, location.lon, newStart, newEnd, indexType);
+                    fetchData(location.lat, location.lon, newStart, newEnd, indexType, showTrendLineRef.current);
                 }
             };
 
@@ -477,7 +494,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 if (e.key === 'Enter' && location) {
                                     const newStart = e.currentTarget.value;
                                     setStartDate(newStart);
-                                    fetchData(location.lat, location.lon, newStart, endDate, indexType);
+                                    fetchData(location.lat, location.lon, newStart, endDate, indexType, showTrendLine);
                                 }
                             }}
                             style={{
@@ -505,7 +522,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 if (e.key === 'Enter' && location) {
                                     const newEnd = e.currentTarget.value;
                                     setEndDate(newEnd);
-                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType);
+                                    fetchData(location.lat, location.lon, startDate, newEnd, indexType, showTrendLine);
                                 }
                             }}
                             style={{
@@ -525,7 +542,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 setStartDate(fullStart);
                                 setEndDate(fullEnd);
                                 if (location) {
-                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType);
+                                    fetchData(location.lat, location.lon, fullStart, fullEnd, indexType, showTrendLine);
                                 }
                             }}
                             title="Reset to full Sentinel-2 time range (Jun 2015 – today)"
@@ -545,7 +562,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                         {location && (
                             <button
                                 onClick={() =>
-                                    fetchData(location.lat, location.lon, startDate, endDate, indexType)
+                                    fetchData(location.lat, location.lon, startDate, endDate, indexType, showTrendLine)
                                 }
                                 disabled={isLoading}
                                 title="Refresh with new dates"
@@ -668,6 +685,39 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             }}
                                             verticalReferenceLines={verticalReferenceLines}
                                         />
+                                        {/* Linear regression overlay — raw mode only, shown when toggled on and server returned data */}
+                                        {aggMode === 'raw' && showTrendLine && linearRegression && chartData.length >= 2 && (() => {
+                                            const mLeft = 45, mRight = 15, mTop = 10, mBottom = 30;
+                                            const innerW = panelWidth - mLeft - mRight;
+                                            const innerH = chartHeight - mTop - mBottom;
+                                            const yToPixel = (v: number) =>
+                                                mTop + innerH - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * innerH;
+                                            return (
+                                                <svg
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        pointerEvents: 'none',
+                                                        overflow: 'visible',
+                                                    }}
+                                                >
+                                                    <line
+                                                        x1={mLeft}
+                                                        y1={yToPixel(linearRegression.y1)}
+                                                        x2={mLeft + innerW}
+                                                        y2={yToPixel(linearRegression.y2)}
+                                                        stroke="#FFB347"
+                                                        strokeWidth={1.5}
+                                                        strokeDasharray="5 4"
+                                                        opacity={0.85}
+                                                    />
+                                                </svg>
+                                            );
+                                        })()}
+
                                         {/* Drag-to-select highlight rectangle */}
                                         {dragSel && Math.abs(dragSel.endPx - dragSel.startPx) > 2 && (
                                             <div
@@ -714,6 +764,35 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                 </button>
                                             );
                                         })}
+                                        {aggMode === 'raw' && (
+                                            <button
+                                                onClick={() => {
+                                                    const next = !showTrendLine;
+                                                    setShowTrendLine(next);
+                                                    // When enabling: re-fetch with linear_regression=true so the
+                                                    // server returns regression data (clear any stale result first).
+                                                    if (next && location) {
+                                                        setLinearRegression(null);
+                                                        fetchData(location.lat, location.lon, startDate, endDate, indexType, true);
+                                                    }
+                                                }}
+                                                title={showTrendLine ? 'Hide trend line' : 'Show trend line'}
+                                                style={{
+                                                    fontSize: 11,
+                                                    padding: '1px 10px',
+                                                    borderRadius: 10,
+                                                    border: showTrendLine
+                                                        ? '1px solid #FFB347'
+                                                        : '1px solid var(--custom-light-blue-25)',
+                                                    background: showTrendLine ? 'rgba(255,179,71,0.15)' : 'transparent',
+                                                    color: showTrendLine ? '#FFB347' : 'var(--custom-light-blue-50)',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s',
+                                                }}
+                                            >
+                                                Trend
+                                            </button>
+                                        )}
                                         <span
                                             className="ml-auto"
                                             style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
