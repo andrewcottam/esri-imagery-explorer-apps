@@ -36,6 +36,12 @@ import {
     HarmonicRegressionResult,
     fitHarmonicRegression,
 } from '@shared/services/ndvi-timeseries/helpers';
+import {
+    detectSingleBand,
+    dateToOrdinal,
+    evaluateSegment,
+    CCDCResult,
+} from '@shared/utils/ccdc/ccdc';
 import { formatInUTCTimeZone } from '@shared/utils/date-time/formatInUTCTimeZone';
 import {
     useAppDispatch,
@@ -62,7 +68,7 @@ type ClickedLocation = { lat: number; lon: number };
 type AggMode = 'raw' | 'mean' | 'min' | 'max';
 
 /** Active curve model overlaid on the chart. */
-type ModelType = 'none' | 'linear' | 'harmonic';
+type ModelType = 'none' | 'linear' | 'harmonic' | 'ccdc';
 
 /** Pixel extents of an in-progress drag-to-select on the chart. */
 type DragSel = { startPx: number; endPx: number };
@@ -393,6 +399,15 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
         const rawData = ndviToChartData(ndviData);
         if (activeModel !== 'harmonic' || rawData.length < 8) return null;
         return fitHarmonicRegression(rawData, 2);
+    }, [activeModel, ndviData]);
+
+    /** CCDC change-detection result — runs full algorithm on raw observations. */
+    const ccdcResult = useMemo<CCDCResult | null>(() => {
+        const rawData = ndviToChartData(ndviData);
+        if (activeModel !== 'ccdc' || rawData.length < 12) return null;
+        const dates = rawData.map((pt) => dateToOrdinal(new Date(pt.x)));
+        const values = rawData.map((pt) => pt.y);
+        return detectSingleBand(dates, values);
     }, [activeModel, ndviData]);
 
     /** RMSE of the linear regression fit — always computed against raw observations
@@ -931,6 +946,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             const hasOverlay =
                                                 (activeModel === 'linear' && linearRegression) ||
                                                 (activeModel === 'harmonic' && harmonicFit) ||
+                                                (activeModel === 'ccdc' && ccdcResult) ||
                                                 monthTickPositions.length > 0 ||
                                                 dayTickPositions.length > 0;
 
@@ -977,6 +993,60 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                             opacity={0.85}
                                                         />
                                                     )}
+
+                                                    {/* CCDC segment curves */}
+                                                    {activeModel === 'ccdc' && ccdcResult && ccdcResult.segments.map((seg, i) => {
+                                                        // Convert ordinal day numbers to JS timestamps (ms)
+                                                        const MS_PER_DAY = 86_400_000;
+                                                        const ORDINAL_EPOCH = 719_163; // ordinal of 1970-01-01
+                                                        const segStartMs = (seg.startDay - ORDINAL_EPOCH) * MS_PER_DAY;
+                                                        const segEndMs   = (seg.endDay   - ORDINAL_EPOCH) * MS_PER_DAY;
+                                                        const clampedStart = Math.max(segStartMs, minTime);
+                                                        const clampedEnd   = Math.min(segEndMs,   maxTime);
+                                                        if (clampedStart >= clampedEnd) return null;
+
+                                                        // Sample 120 points across the visible portion of this segment
+                                                        const N = 120;
+                                                        const step = (clampedEnd - clampedStart) / (N - 1);
+                                                        const sampleMs  = Array.from({ length: N }, (_, j) => clampedStart + j * step);
+                                                        const sampleOrd = sampleMs.map((ms) => Math.floor(ms / MS_PER_DAY) + ORDINAL_EPOCH);
+                                                        const predicted  = evaluateSegment(seg, sampleOrd)[0]; // single band
+
+                                                        const d = sampleMs
+                                                            .map((ms, j) => `${j === 0 ? 'M' : 'L'}${xToPixel(ms).toFixed(1)},${yToPixel(predicted[j]).toFixed(1)}`)
+                                                            .join(' ');
+
+                                                        return (
+                                                            <path
+                                                                key={`ccdc-seg-${i}`}
+                                                                d={d}
+                                                                stroke="#A855F7"
+                                                                strokeWidth={1.5}
+                                                                fill="none"
+                                                                opacity={0.85}
+                                                            />
+                                                        );
+                                                    })}
+
+                                                    {/* CCDC change break lines (red vertical at each detected break) */}
+                                                    {activeModel === 'ccdc' && ccdcResult && ccdcResult.segments
+                                                        .filter((seg) => seg.changeProbability > 0)
+                                                        .map((seg, i) => {
+                                                            const breakMs = (seg.breakDay - 719_163) * 86_400_000;
+                                                            if (breakMs < minTime || breakMs > maxTime) return null;
+                                                            const x = xToPixel(breakMs);
+                                                            return (
+                                                                <line
+                                                                    key={`ccdc-break-${i}`}
+                                                                    x1={x} y1={mTop}
+                                                                    x2={x} y2={chartHeight - mBottom}
+                                                                    stroke="#ef4444"
+                                                                    strokeWidth={1}
+                                                                    strokeDasharray="3 2"
+                                                                    opacity={0.7}
+                                                                />
+                                                            );
+                                                        })}
 
                                                     {/* Month minor ticks (when showing year labels) */}
                                                     {monthTickPositions.map((t) => (
@@ -1095,6 +1165,18 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             Harmonic
                                         </button>
 
+                                        {/* CCDC button */}
+                                        <button
+                                            onClick={() => {
+                                                const next: ModelType = activeModel === 'ccdc' ? 'none' : 'ccdc';
+                                                setActiveModel(next);
+                                            }}
+                                            title={activeModel === 'ccdc' ? 'Hide CCDC segments' : 'Run Continuous Change Detection and Classification (CCDC) — detects structural breaks in the time series'}
+                                            style={pillStyle(activeModel === 'ccdc', '#A855F7')}
+                                        >
+                                            CCDC
+                                        </button>
+
                                         {/* Linear stats */}
                                         {activeModel === 'linear' && linearRegression?.slope !== undefined && (
                                             <span
@@ -1119,6 +1201,33 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                 style={{ fontSize: 11, color: '#4ECDC4', whiteSpace: 'nowrap' }}
                                             >
                                                 R²&nbsp;{harmonicFit.r2.toFixed(3)}&nbsp;·&nbsp;RMSE&nbsp;{harmonicFit.rmse.toFixed(3)}
+                                            </span>
+                                        )}
+
+                                        {/* CCDC stats */}
+                                        {activeModel === 'ccdc' && ccdcResult && (
+                                            <span
+                                                className="ml-auto"
+                                                title="CCDC: number of stable segments and detected change breaks"
+                                                style={{ fontSize: 11, color: '#A855F7', whiteSpace: 'nowrap' }}
+                                            >
+                                                {ccdcResult.segments.length}&nbsp;segment{ccdcResult.segments.length !== 1 ? 's' : ''}
+                                                {ccdcResult.segments.filter((s) => s.changeProbability > 0).length > 0 && (
+                                                    <>
+                                                        &nbsp;·&nbsp;
+                                                        {ccdcResult.segments.filter((s) => s.changeProbability > 0).length}&nbsp;break{ccdcResult.segments.filter((s) => s.changeProbability > 0).length !== 1 ? 's' : ''}
+                                                    </>
+                                                )}
+                                            </span>
+                                        )}
+
+                                        {/* CCDC not enough data */}
+                                        {activeModel === 'ccdc' && !ccdcResult && ndviData.length > 0 && ndviData.length < 12 && (
+                                            <span
+                                                className="ml-auto"
+                                                style={{ fontSize: 11, color: '#A855F7', opacity: 0.6, whiteSpace: 'nowrap' }}
+                                            >
+                                                Need ≥ 12 observations
                                             </span>
                                         )}
                                     </div>
