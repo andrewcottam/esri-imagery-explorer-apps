@@ -903,6 +903,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             '--axis-tick-line-color': 'var(--custom-light-blue-50)',
                                             '--axis-tick-text-color': 'var(--custom-light-blue-50)',
                                             '--crosshair-reference-line-color': 'var(--custom-light-blue-50)',
+                                            '--vertical-reference-line-color': 'var(--custom-light-blue-50)',
+                                            '--vertical-reference-line-width': '1',
                                             '--tooltip-text-font-size': '.725rem',
                                             '--tooltip-text-color': 'var(--custom-light-blue-70)',
                                             '--tooltip-background-color': 'var(--custom-background-95)',
@@ -1053,10 +1055,10 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                         <line
                                                             key={t}
                                                             x1={xToPixel(t)} y1={axisY}
-                                                            x2={xToPixel(t)} y2={axisY + 3}
+                                                            x2={xToPixel(t)} y2={axisY + 5}
                                                             stroke="var(--custom-light-blue-50)"
-                                                            strokeWidth={0.75}
-                                                            opacity={0.5}
+                                                            strokeWidth={1}
+                                                            opacity={0.65}
                                                         />
                                                     ))}
 
