@@ -903,7 +903,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             '--axis-tick-line-color': 'var(--custom-light-blue-50)',
                                             '--axis-tick-text-color': 'var(--custom-light-blue-50)',
                                             '--crosshair-reference-line-color': 'var(--custom-light-blue-50)',
-                                            '--vertical-reference-line-color': 'var(--custom-light-blue-25)',
+                                            '--vertical-reference-line-color': 'var(--custom-light-blue-10)',
                                             '--vertical-reference-line-width': '1',
                                             '--tooltip-text-font-size': '.725rem',
                                             '--tooltip-text-color': 'var(--custom-light-blue-70)',
