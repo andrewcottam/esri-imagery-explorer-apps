@@ -1094,7 +1094,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                     </div>
 
                                     {/* Separator line below chart */}
-                                    <div style={{ marginTop: 10, borderTop: '1px solid var(--custom-light-blue-25)' }} />
+                                    <div style={{ marginTop: 4, borderTop: '1px solid var(--custom-light-blue-25)' }} />
 
                                     {/* ── Data row: aggregation buttons + series stats ── */}
                                     <div className="flex items-center gap-2 pt-2 flex-wrap">

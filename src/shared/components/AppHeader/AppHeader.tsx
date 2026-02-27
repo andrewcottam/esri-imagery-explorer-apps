@@ -171,20 +171,6 @@ const AppHeader: FC<Props> = ({ title, showDocButton, docButtonTooltip }) => {
                         <span className="text-sm md:text-lg">{title}</span>
                     </div>
 
-                    <div
-                        className="cursor-pointer ml-2 flex items-center"
-                        // onClick={setShowImageryExplorerAppsList.bind(
-                        //     null,
-                        //     !showImageryExplorerAppsList
-                        // )}
-                        onClick={toggleAppLauncherList}
-                    >
-                        {showImageryExplorerAppsList ? (
-                            <CalciteIcon icon="chevron-up" />
-                        ) : (
-                            <CalciteIcon icon="chevron-down" />
-                        )}
-                    </div>
                 </div>
             </div>
 

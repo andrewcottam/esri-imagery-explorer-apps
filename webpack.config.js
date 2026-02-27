@@ -284,7 +284,6 @@ module.exports = (env, options) => {
                 template: './public/index.html',
                 filename: 'index.html',
                 title,
-                favicon: './public/esri-favicon-light-32.png',
                 meta: {
                     title,
                     description,

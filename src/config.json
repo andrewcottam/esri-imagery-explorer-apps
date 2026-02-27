@@ -22,7 +22,7 @@
             "supportedLocales": ["en"]
         },
         "sentinel2explorer": {
-            "title": "Esri | Sentinel-2 Explorer",
+            "title": "Restor Land Cover Change Tool",
             "description": "Explore and begin to unlock the wealth of information provided by Sentinel-2 through an intuitive user experience leveraging a variety of ArcGIS capabilities.",
             "pathname": "/sentinel2explorer",
             "entrypoint": "/src/sentinel-2-explorer/index.tsx",
