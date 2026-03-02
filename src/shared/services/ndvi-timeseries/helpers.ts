@@ -56,7 +56,8 @@ export const fetchNDVITimeSeries = async (
     startDate: string,
     endDate: string,
     index: IndexType = 'ndvi',
-    includeLinearRegression = false
+    includeLinearRegression = false,
+    sensor?: string,
 ): Promise<NDVITimeSeriesResult> => {
     const response = await fetch(NDVI_TIMESERIES_ENDPOINT, {
         method: 'POST',
@@ -68,6 +69,7 @@ export const fetchNDVITimeSeries = async (
             end_date: endDate,
             index,
             ...(includeLinearRegression && { linear_regression: true }),
+            ...(sensor && { sensor }),
         }),
     });
 

@@ -60,6 +60,9 @@ import { selectQueryParams4SceneInSelectedMode } from '@shared/store/ImageryScen
 /** Default Sentinel-2 renderer used when none is currently selected. */
 const DEFAULT_RASTER_FUNCTION = 'Natural Color for Visualization';
 
+/** Sentinel-2 data begins on this date. Earlier start dates switch to Landsat. */
+const SENTINEL2_LAUNCH_DATE = '2015-06-23';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type ClickedLocation = { lat: number; lon: number };
@@ -203,6 +206,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const [chartHeight, setChartHeight] = useState(DEFAULT_CHART_HEIGHT);
     const [dragSel, setDragSel] = useState<DragSel | null>(null);
     const [showData, setShowData] = useState(true);
+    /** Which satellite sensor the currently displayed data came from. */
+    const [dataSource, setDataSource] = useState<'sentinel2' | 'landsat'>('sentinel2');
 
     const clickHandlerRef = useRef<__esri.Handle | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -270,8 +275,11 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             setIsLoading(true);
             setError(null);
             try {
-                const result = await fetchNDVITimeSeries(lat, lon, start, end, index);
+                const isLandsat = start < SENTINEL2_LAUNCH_DATE;
+                const sensor = isLandsat ? '5+7+8+9' : undefined;
+                const result = await fetchNDVITimeSeries(lat, lon, start, end, index, false, sensor);
                 setNdviData(result.data);
+                setDataSource(isLandsat ? 'landsat' : 'sentinel2');
                 if (result.data.length === 0)
                     setError('No data returned for this location and date range.');
             } catch (err: any) {
@@ -851,6 +859,19 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                     title="Total number of raw observations"
                                 >
                                     n&nbsp;=&nbsp;{ndviData.length}
+                                </span>
+                                <span
+                                    title={dataSource === 'landsat' ? 'Using Landsat 5/7/8/9 (start date before Sentinel-2 launch)' : 'Using Sentinel-2'}
+                                    style={{
+                                        fontSize: 10,
+                                        padding: '1px 6px',
+                                        borderRadius: 8,
+                                        border: `1px solid ${dataSource === 'landsat' ? '#F59E0B44' : 'var(--custom-light-blue-25)'}`,
+                                        color: dataSource === 'landsat' ? '#F59E0B' : 'var(--custom-light-blue-50)',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {dataSource === 'landsat' ? 'Landsat' : 'Sentinel-2'}
                                 </span>
                             </>
                         )}
