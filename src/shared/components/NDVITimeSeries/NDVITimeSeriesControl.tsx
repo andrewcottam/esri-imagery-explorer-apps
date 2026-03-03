@@ -75,7 +75,13 @@ type ModelType = 'none' | 'linear' | 'harmonic' | 'ccdc';
 /** Pixel extents of an in-progress drag-to-select on the chart. */
 type DragSel = { startPx: number; endPx: number };
 
-type Props = { mapView?: MapView };
+type Props = {
+    mapView?: MapView;
+    /** Called whenever the tool's active state changes. */
+    onIsActiveChange?: (active: boolean) => void;
+    /** Called when the user clicks a map point (geographic + screen coords). */
+    onMapClick?: (lat: number, lon: number, screenX: number, screenY: number) => void;
+};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -171,7 +177,7 @@ const pillStyle = (active: boolean, activeColor: string): React.CSSProperties =>
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
+export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, onMapClick }) => {
     const [isActive, setIsActive] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [location, setLocation] = useState<ClickedLocation | null>(null);
@@ -208,6 +214,13 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     /** Which satellite sensor the currently displayed data came from. */
     const [dataSource, setDataSource] = useState<'sentinel2' | 'landsat'>('sentinel2');
 
+    // Custom y-axis domain overrides — null means "use auto-computed value"
+    const [customYMin, setCustomYMin] = useState<number | null>(null);
+    const [customYMax, setCustomYMax] = useState<number | null>(null);
+    // Which y-axis boundary is being inline-edited right now
+    const [editingYMin, setEditingYMin] = useState(false);
+    const [editingYMax, setEditingYMax] = useState(false);
+
     const clickHandlerRef = useRef<__esri.Handle | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const markerGraphicRef = useRef<Graphic | null>(null);
@@ -223,6 +236,9 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     ndviDataRef.current = ndviData;
     const aggModeRef = useRef<AggMode>(aggMode);
     aggModeRef.current = aggMode;
+    // Stable ref for the parent callback — keeps the click handler effect stable.
+    const onMapClickRef = useRef(onMapClick);
+    onMapClickRef.current = onMapClick;
 
     // Redux integration — used to load a Sentinel-2 scene on chart click.
     const dispatch = useAppDispatch();
@@ -303,9 +319,12 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             const { latitude, longitude } = event.mapPoint;
             const lat = Math.round(latitude * 1e6) / 1e6;
             const lon = Math.round(longitude * 1e6) / 1e6;
+            const screenX = (event.native as MouseEvent).clientX;
+            const screenY = (event.native as MouseEvent).clientY;
             setLocation({ lat, lon });
             showPointOnMap(lat, lon);
             fetchData(lat, lon, startDate, endDate, indexType);
+            onMapClickRef.current?.(lat, lon, screenX, screenY);
         });
         return () => {
             clickHandlerRef.current?.remove();
@@ -327,6 +346,12 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             setError(null);
         }
     }, [isActive, mapView]);
+
+    // ── Notify parent when active state changes ───────────────────────────────
+
+    useEffect(() => {
+        onIsActiveChange?.(isActive);
+    }, [isActive, onIsActiveChange]);
 
     // ── Re-fetch when index type changes (if a location is already loaded) ────
     const prevIndexRef = useRef<IndexType>(indexType);
@@ -520,19 +545,56 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
 
     // ── Y-axis domain ─────────────────────────────────────────────────────────
 
-    const yMin = useMemo(() => {
-        if (ndviData.length === 0) return -0.2;
+    const computedYMin = useMemo(() => {
+        if (ndviData.length === 0) return 0;
         const dataMin = Math.min(...ndviData.map((d) => d.ndvi));
-        return Math.min(-0.2, Math.floor(dataMin * 10) / 10);
+        return Math.min(0, Math.floor(dataMin * 10) / 10);
     }, [ndviData]);
 
-    const yMax = useMemo(() => {
+    const computedYMax = useMemo(() => {
         if (ndviData.length === 0) return 1;
         const dataMax = Math.max(...ndviData.map((d) => d.ndvi));
         return Math.max(1, Math.ceil(dataMax * 10) / 10);
     }, [ndviData]);
 
-    const yDomain: [number, number] = [yMin, yMax];
+    // Apply user overrides; fall back to auto-computed values
+    const effectiveYMin = customYMin ?? computedYMin;
+    const effectiveYMax = customYMax ?? computedYMax;
+    const yDomain: [number, number] = [effectiveYMin, effectiveYMax];
+
+    // Reset custom overrides and editing state whenever a new dataset arrives
+    useEffect(() => {
+        setCustomYMin(null);
+        setCustomYMax(null);
+        setEditingYMin(false);
+        setEditingYMax(false);
+    }, [ndviData]);
+
+    /**
+     * Fixed x domain derived from raw observation timestamps.
+     * Shared across all aggregation modes so the chart's x scale does not
+     * shift when switching between Raw, Mean, Min, and Max views.
+     */
+    const fixedXDomain = useMemo<[number, number] | undefined>(() => {
+        if (ndviData.length === 0) return undefined;
+        const times = ndviData
+            .map((d) => (d.date ? new Date(d.date).getTime() : NaN))
+            .filter((t) => !isNaN(t));
+        if (times.length === 0) return undefined;
+        return [Math.min(...times), Math.max(...times)];
+    }, [ndviData]);
+
+    /** Year span of the currently loaded dataset, e.g. "2015–2024". */
+    const yearRange = useMemo<string | null>(() => {
+        if (ndviData.length === 0) return null;
+        const years = ndviData
+            .map((d) => (d.date ? +d.date.substring(0, 4) : NaN))
+            .filter((y) => !isNaN(y));
+        if (years.length === 0) return null;
+        const minYear = Math.min(...years);
+        const maxYear = Math.max(...years);
+        return minYear === maxYear ? `${minYear}` : `${minYear}–${maxYear}`;
+    }, [ndviData]);
 
     // ── X-axis helpers ────────────────────────────────────────────────────────
 
@@ -808,7 +870,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                     fetchData(location.lat, location.lon, startDate, endDate, indexType)
                                 }
                                 disabled={isLoading}
-                                title="Refresh with new dates"
+                                title="Refetch the data from the server"
                                 style={{
                                     marginLeft: 'auto',
                                     color: 'var(--custom-light-blue)',
@@ -855,7 +917,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                     style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
                                     title="Total number of raw observations"
                                 >
-                                    n&nbsp;=&nbsp;{ndviData.length}
+                                    n&nbsp;=&nbsp;{ndviData.length}{yearRange ? ` (${yearRange})` : ''}
                                 </span>
                                 <span
                                     title={dataSource === 'landsat' ? 'Using Landsat 5/7/8/9 (start date before Sentinel-2 launch)' : 'Using Sentinel-2'}
@@ -908,11 +970,18 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                 {hasData && (
                                     <>
                                     {/* Suppress pointer events on vertical reference line groups so the
-                                        D3 crosshair/tooltip continues to fire normally. */}
-                                    <style>{`.vertical-reference-line-group { pointer-events: none !important; }`}</style>
+                                        D3 crosshair/tooltip continues to fire normally.
+                                        Also clip the D3 chart SVG so the data line cannot escape the
+                                        plot area — without touching the HTML tooltip div which sits
+                                        alongside the SVG and must be able to overflow upward. */}
+                                    <style>{`
+                                        .vertical-reference-line-group { pointer-events: none !important; }
+                                        .ndvi-chart-wrap > svg:first-of-type { overflow: hidden; }
+                                    `}</style>
 
                                     {/* ── Chart ── */}
                                     <div
+                                        className="ndvi-chart-wrap"
                                         style={{
                                             height: chartHeight,
                                             position: 'relative',
@@ -937,7 +1006,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             strokeWidth={1.5}
                                             margin={{ bottom: 30, left: 45, right: 15, top: 10 }}
                                             yScaleOptions={{ domain: yDomain }}
-                                            xScaleOptions={{ useTimeScale: true }}
+                                            xScaleOptions={{ useTimeScale: true, ...(fixedXDomain ? { domain: fixedXDomain } : {}) }}
                                             bottomAxisOptions={{
                                                 numberOfTicks: xTickCount,
                                                 tickFormatFunction: (val: any) =>
@@ -955,15 +1024,21 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                             const containerW = panelWidth - 24;
                                             const innerW = containerW - mLeft - mRight;
                                             const innerH = chartHeight - mTop - mBottom;
-                                            const minTime = chartData[0].x;
-                                            const maxTime = chartData[chartData.length - 1].x;
+                                            // Use the fixed raw-data domain so the overlay stays
+                                            // aligned with the chart when switching aggregation modes.
+                                            const minTime = fixedXDomain ? fixedXDomain[0] : chartData[0].x;
+                                            const maxTime = fixedXDomain ? fixedXDomain[1] : chartData[chartData.length - 1].x;
                                             const xToPixel = (t: number) =>
                                                 mLeft + ((t - minTime) / (maxTime - minTime)) * innerW;
                                             const yToPixel = (v: number) =>
                                                 mTop + innerH - ((v - yDomain[0]) / (yDomain[1] - yDomain[0])) * innerH;
                                             const axisY = chartHeight - mBottom;
 
+                                            // Show horizontal reference line at NDVI=0 whenever 0 is within the y-domain
+                                            const has0Line = yDomain[0] <= 0 && yDomain[1] >= 0;
+
                                             const hasOverlay =
+                                                has0Line ||
                                                 (activeModel === 'linear' && linearRegression) ||
                                                 (activeModel === 'harmonic' && harmonicFit) ||
                                                 (activeModel === 'ccdc' && ccdcResult) ||
@@ -984,6 +1059,20 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                         overflow: 'hidden',
                                                     }}
                                                 >
+                                                    {/* Horizontal reference line at NDVI = 0
+                                                        Half the opacity of the vertical reference lines */}
+                                                    {has0Line && (
+                                                        <line
+                                                            x1={mLeft}
+                                                            y1={yToPixel(0)}
+                                                            x2={mLeft + innerW}
+                                                            y2={yToPixel(0)}
+                                                            stroke="var(--custom-light-blue-10)"
+                                                            strokeWidth={1}
+                                                            opacity={0.5}
+                                                        />
+                                                    )}
+
                                                     {/* Linear regression line */}
                                                     {activeModel === 'linear' && linearRegression && (
                                                         <line
@@ -1094,6 +1183,151 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
                                                 </svg>
                                             );
                                         })()}
+
+                                        {/* ── Y-axis min/max interactive labels ──────────────────────
+                                            These HTML elements sit on top of the SVG in the left margin
+                                            area (0..44 px) at the top and bottom of the plot.  Clicking
+                                            one opens an inline number input; Enter/blur confirms it.
+                                            A custom value is shown in full-brightness to indicate the
+                                            axis is no longer auto-scaled.  Resets when data reloads. */}
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: 44,
+                                                height: '100%',
+                                                pointerEvents: 'none',
+                                            }}
+                                        >
+                                            {/* yMax label — top of the y-axis */}
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 10,
+                                                    right: 1,
+                                                    transform: 'translateY(-50%)',
+                                                    pointerEvents: 'auto',
+                                                }}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                            >
+                                                {editingYMax ? (
+                                                    <input
+                                                        type="number"
+                                                        step="0.05"
+                                                        defaultValue={effectiveYMax.toFixed(2)}
+                                                        autoFocus
+                                                        style={{
+                                                            width: 40,
+                                                            background: 'var(--custom-background)',
+                                                            border: '1px solid var(--custom-light-blue)',
+                                                            color: 'var(--custom-light-blue)',
+                                                            fontSize: 9,
+                                                            padding: '0 2px',
+                                                            textAlign: 'right',
+                                                            outline: 'none',
+                                                            borderRadius: 2,
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (!isNaN(val) && val > effectiveYMin) setCustomYMax(val);
+                                                            setEditingYMax(false);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            e.stopPropagation();
+                                                            if (e.key === 'Enter') {
+                                                                const val = parseFloat(e.currentTarget.value);
+                                                                if (!isNaN(val) && val > effectiveYMin) setCustomYMax(val);
+                                                                setEditingYMax(false);
+                                                            }
+                                                            if (e.key === 'Escape') setEditingYMax(false);
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        onClick={() => setEditingYMax(true)}
+                                                        title={customYMax != null ? `y-max: ${customYMax.toFixed(2)} (custom) — click to edit` : 'Click to set y-axis maximum'}
+                                                        style={{
+                                                            display: 'block',
+                                                            fontSize: 9,
+                                                            color: customYMax != null ? 'var(--custom-light-blue)' : 'var(--custom-light-blue-50)',
+                                                            textAlign: 'right',
+                                                            lineHeight: 1,
+                                                            cursor: 'pointer',
+                                                            paddingRight: 2,
+                                                            textDecoration: 'underline dotted',
+                                                            textUnderlineOffset: 2,
+                                                        }}
+                                                    >
+                                                        {effectiveYMax.toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* yMin label — bottom of the y-axis */}
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    bottom: 30,
+                                                    right: 1,
+                                                    transform: 'translateY(50%)',
+                                                    pointerEvents: 'auto',
+                                                }}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                            >
+                                                {editingYMin ? (
+                                                    <input
+                                                        type="number"
+                                                        step="0.05"
+                                                        defaultValue={effectiveYMin.toFixed(2)}
+                                                        autoFocus
+                                                        style={{
+                                                            width: 40,
+                                                            background: 'var(--custom-background)',
+                                                            border: '1px solid var(--custom-light-blue)',
+                                                            color: 'var(--custom-light-blue)',
+                                                            fontSize: 9,
+                                                            padding: '0 2px',
+                                                            textAlign: 'right',
+                                                            outline: 'none',
+                                                            borderRadius: 2,
+                                                        }}
+                                                        onBlur={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (!isNaN(val) && val < effectiveYMax) setCustomYMin(val);
+                                                            setEditingYMin(false);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            e.stopPropagation();
+                                                            if (e.key === 'Enter') {
+                                                                const val = parseFloat(e.currentTarget.value);
+                                                                if (!isNaN(val) && val < effectiveYMax) setCustomYMin(val);
+                                                                setEditingYMin(false);
+                                                            }
+                                                            if (e.key === 'Escape') setEditingYMin(false);
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        onClick={() => setEditingYMin(true)}
+                                                        title={customYMin != null ? `y-min: ${customYMin.toFixed(2)} (custom) — click to edit` : 'Click to set y-axis minimum'}
+                                                        style={{
+                                                            display: 'block',
+                                                            fontSize: 9,
+                                                            color: customYMin != null ? 'var(--custom-light-blue)' : 'var(--custom-light-blue-50)',
+                                                            textAlign: 'right',
+                                                            lineHeight: 1,
+                                                            cursor: 'pointer',
+                                                            paddingRight: 2,
+                                                            textDecoration: 'underline dotted',
+                                                            textUnderlineOffset: 2,
+                                                        }}
+                                                    >
+                                                        {effectiveYMin.toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
 
                                         {/* Drag-to-select highlight rectangle */}
                                         {dragSel && Math.abs(dragSel.endPx - dragSel.startPx) > 2 && (

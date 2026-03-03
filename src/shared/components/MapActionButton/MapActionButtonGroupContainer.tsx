@@ -14,7 +14,7 @@
  */
 
 import MapView from '@arcgis/core/views/MapView';
-import React, { FC } from 'react';
+import React, { FC, useState, useCallback } from 'react';
 import { MapActionButtonGroup } from './MapActionButtonGroup';
 import { ZoomToExtent } from '../ZoomToExtent';
 import { ZoomWidget } from '../MapView/ZoomWidget';
@@ -25,6 +25,7 @@ import { AddBookmarkButton } from '../AddBookmarkButton/AddBookmarkButton';
 import { BasemapGallery } from '../BasemapGallery';
 import { MapillaryControl } from '../MapillaryControl';
 import { NDVITimeSeriesControl } from '@shared/components/NDVITimeSeries/NDVITimeSeriesControl';
+import { IdentifyControl, ExternalMapClick } from '@shared/components/IdentifyTool/IdentifyControl';
 
 type Props = {
     mapView?: MapView;
@@ -50,6 +51,25 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
 }) => {
     const { t } = useTranslation();
 
+    // ── Shared click coordination between time-series and identify ─────────────
+    // When the time-series panel is active it owns the map click and marker.
+    // IdentifyControl listens to the same click via externalClick so both panels
+    // are populated from a single user action with a single map marker.
+    const [ndviIsActive, setNdviIsActive] = useState(false);
+    const [ndviClick, setNdviClick] = useState<ExternalMapClick | null>(null);
+
+    const handleNdviIsActiveChange = useCallback((active: boolean) => {
+        setNdviIsActive(active);
+        if (!active) setNdviClick(null);
+    }, []);
+
+    const handleNdviMapClick = useCallback(
+        (lat: number, lon: number, screenX: number, screenY: number) => {
+            setNdviClick({ lat, lon, screenX, screenY });
+        },
+        []
+    );
+
     if (!mapView) return null;
 
     return (
@@ -66,7 +86,16 @@ export const MapActionButtonGroupContainer: FC<Props> = ({
 
             <AddBookmarkButton mapView={mapView} />
             <MapillaryControl mapView={mapView} />
-            <NDVITimeSeriesControl mapView={mapView} />
+            <NDVITimeSeriesControl
+                mapView={mapView}
+                onIsActiveChange={handleNdviIsActiveChange}
+                onMapClick={handleNdviMapClick}
+            />
+            <IdentifyControl
+                mapView={mapView}
+                isExternallyDriven={ndviIsActive}
+                externalClick={ndviIsActive ? ndviClick : null}
+            />
         </MapActionButtonGroup>
     );
 };
