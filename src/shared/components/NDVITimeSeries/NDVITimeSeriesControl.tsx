@@ -50,6 +50,7 @@ import {
     modeChanged,
     shouldForceSceneReselectionUpdated,
 } from '@shared/store/ImageryScene/reducer';
+import { bottomPanelToggled } from '@shared/store/UI/reducer';
 import {
     updateAcquisitionDate,
     updateRasterFunctionName,
@@ -510,6 +511,10 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
 
                     const clickedDate = new Date(closest.x).toISOString().substring(0, 10);
 
+                    // Ensure the bottom panel is visible so that CalendarContainer
+                    // (which runs useFindSelectedSceneByDate) is mounted and can
+                    // respond to the acquisitionDate + forceReselection changes below.
+                    dispatch(bottomPanelToggled(false));
                     dispatch(modeChanged('find a scene'));
                     if (!queryParamsRef.current?.rasterFunctionName) {
                         dispatch(updateRasterFunctionName(DEFAULT_RASTER_FUNCTION));
@@ -861,7 +866,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            All
+                            Reset
                         </button>
                         {location && (
                             <button
@@ -909,8 +914,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                     className="ml-auto"
                                     style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}
                                 >
-                                    {location.lat.toFixed(4)}°{location.lat >= 0 ? 'N' : 'S'},{' '}
-                                    {location.lon.toFixed(4)}°{location.lon >= 0 ? 'E' : 'W'}
+                                    {Math.abs(location.lat).toFixed(4)}°{location.lat >= 0 ? 'N' : 'S'},{' '}
+                                    {Math.abs(location.lon).toFixed(4)}°{location.lon >= 0 ? 'E' : 'W'}
                                 </span>
                                 <span
                                     style={{ fontSize: 11, color: 'var(--custom-light-blue-50)' }}

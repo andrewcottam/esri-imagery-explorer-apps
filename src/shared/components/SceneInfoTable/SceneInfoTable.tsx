@@ -29,7 +29,7 @@ export type SceneInfoTableData = {
      */
     name: string;
     /**
-     * value of the field
+     * value of the field (displayed in the UI)
      */
     value: string;
     /**
@@ -41,6 +41,12 @@ export type SceneInfoTableData = {
      * if true, user can click to copy this value
      */
     clickToCopy?: boolean;
+    /**
+     * Optional override value that will be copied to clipboard instead of `value`.
+     * Use when you want to display one thing but copy something different (e.g. display
+     * a short scene ID but copy its full AWS COG URL).
+     */
+    copyValue?: string;
 };
 
 type Props = {
@@ -56,6 +62,7 @@ const SceneInfoRow: FC<SceneInfoTableData> = ({
     value,
     testValue,
     clickToCopy,
+    copyValue,
 }) => {
     const [hasCopied2Clipboard, setHasCopied2Clipboard] =
         useState<boolean>(false);
@@ -67,7 +74,7 @@ const SceneInfoRow: FC<SceneInfoTableData> = ({
             return;
         }
 
-        await navigator.clipboard.writeText(value);
+        await navigator.clipboard.writeText(copyValue ?? value);
 
         setHasCopied2Clipboard(true);
 
@@ -95,7 +102,7 @@ const SceneInfoRow: FC<SceneInfoTableData> = ({
         }
 
         const tooltipContent = `
-            <p class="break-words mb-1">${value}</p>
+            <p class="break-words mb-1">${copyValue ?? value}</p>
             <p>
                 ${
                     hasCopied2Clipboard
