@@ -17,7 +17,6 @@ import React, { FC, useState, useEffect, useRef, useCallback, useMemo } from 're
 import MapView from '@arcgis/core/views/MapView';
 import Graphic from '@arcgis/core/Graphic';
 import Point from '@arcgis/core/geometry/Point';
-import GraphicsLayer from '@arcgis/core/layers/GraphicsLayer';
 import SimpleMarkerSymbol from '@arcgis/core/symbols/SimpleMarkerSymbol';
 import { LineChartBasic } from '@vannizhang/react-d3-charts';
 import {
@@ -81,7 +80,7 @@ type Props = { mapView?: MapView };
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const MIN_PANEL_WIDTH = 360;
-const MAX_PANEL_WIDTH = 900;
+const MAX_PANEL_WIDTH = 1600;
 const DEFAULT_PANEL_WIDTH = 480;
 const MIN_CHART_HEIGHT = 100;
 const MAX_CHART_HEIGHT = 600;
@@ -211,7 +210,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
 
     const clickHandlerRef = useRef<__esri.Handle | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
-    const graphicsLayerRef = useRef<GraphicsLayer | null>(null);
+    const markerGraphicRef = useRef<Graphic | null>(null);
 
     // Stable refs so resize/drag callbacks never need to be re-created.
     const sizeRef = useRef({ width: DEFAULT_PANEL_WIDTH, height: DEFAULT_CHART_HEIGHT });
@@ -236,26 +235,23 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
     const showPointOnMap = useCallback(
         (lat: number, lon: number) => {
             if (!mapView) return;
-            if (!graphicsLayerRef.current) {
-                graphicsLayerRef.current = new GraphicsLayer({ listMode: 'hide' });
-                mapView.map.add(graphicsLayerRef.current);
+            // Remove previous marker. Using mapView.graphics ensures the marker
+            // is always rendered above all imagery layers, so it won't be covered
+            // when the current scene changes and a new imagery layer is added.
+            if (markerGraphicRef.current) {
+                mapView.graphics.remove(markerGraphicRef.current);
             }
-            graphicsLayerRef.current.removeAll();
-            graphicsLayerRef.current.add(
-                new Graphic({
-                    geometry: new Point({ latitude: lat, longitude: lon }),
-                    symbol: new SimpleMarkerSymbol({
-                        style: 'circle',
-                        color: [5, 203, 99, 220],
-                        size: 12,
-                        outline: { color: [255, 255, 255, 200], width: 1.5 },
-                    }),
-                })
-            );
-            mapView.map.reorder(
-                graphicsLayerRef.current,
-                mapView.map.layers.length - 1
-            );
+            const graphic = new Graphic({
+                geometry: new Point({ latitude: lat, longitude: lon }),
+                symbol: new SimpleMarkerSymbol({
+                    style: 'circle',
+                    color: [5, 203, 99, 220],
+                    size: 12,
+                    outline: { color: [255, 255, 255, 200], width: 1.5 },
+                }),
+            });
+            markerGraphicRef.current = graphic;
+            mapView.graphics.add(graphic);
         },
         [mapView]
     );
@@ -321,10 +317,9 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
 
     useEffect(() => {
         if (!isActive) {
-            if (graphicsLayerRef.current) {
-                graphicsLayerRef.current.removeAll();
-                if (mapView) mapView.map.remove(graphicsLayerRef.current);
-                graphicsLayerRef.current = null;
+            if (markerGraphicRef.current && mapView) {
+                mapView.graphics.remove(markerGraphicRef.current);
+                markerGraphicRef.current = null;
             }
             setLocation(null);
             setNdviData([]);
@@ -582,11 +577,13 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView }) => {
             return Math.min(pixelBased, monthCount);
         }
         if (chartData.length < 2) return 3;
-        return (
+        const yearSpan =
             new Date(chartData[chartData.length - 1].x).getUTCFullYear() -
             new Date(chartData[0].x).getUTCFullYear() +
-            1
-        );
+            1;
+        // Cap by available pixel width (~40 px per "yyyy" label) to avoid overlap on long series
+        const pixelBased = Math.max(2, Math.floor((panelWidth - CHART_MARGIN_H) / 40));
+        return Math.min(pixelBased, yearSpan);
     }, [showMonthLabels, spanMonths, panelWidth, chartData]);
 
     /**

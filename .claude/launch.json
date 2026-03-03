@@ -6,42 +6,6 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start:sentinel2"],
       "port": 8080
-    },
-    {
-      "name": "landsat",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:landsat"],
-      "port": 8080
-    },
-    {
-      "name": "sentinel1",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:sentinel1"],
-      "port": 8080
-    },
-    {
-      "name": "landcover",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:landcover"],
-      "port": 8080
-    },
-    {
-      "name": "nlcd-landcover",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:nlcd-landcover"],
-      "port": 8080
-    },
-    {
-      "name": "spectral-sampler",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:spectral-sampler"],
-      "port": 8080
-    },
-    {
-      "name": "surface-temp",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:surface-temp:dev"],
-      "port": 8080
     }
   ]
 }
