@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     SceneInfoTable,
     SceneInfoTableData,
@@ -29,39 +29,64 @@ import { useTranslation } from 'react-i18next';
 import { getFormatedDateString } from '@shared/utils/date-time/formatDateString';
 
 /**
- * Construct the AWS Earth Search COG URL for the TCI (true-colour) GeoTIFF from
- * a Sentinel-2 scene ID.
+ * Query the Element84 Earth Search STAC API to find the TCI.tif COG URL for a
+ * given Sentinel-2 scene ID.
  *
- * Scene ID format: S2A_MSIL2A_20190610T002101_N0212_R116_T55JDF_20201006T001729
- * Target URL format:
- *   https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/
- *   sentinel-2-c1-l2a/{zone}/{latBand}/{gridSq}/{year}/{month}/
- *   {satellite}_T{tile}_{datetime}_L2A/TCI.tif
+ * The Esri service scene ID format is:
+ *   S2A_MSIL2A_20250630T002211_N0511_R116_T55JDF_20250630T025659
+ *
+ * The Earth Search C1 item IDs use a slightly different acquisition timestamp
+ * (off by a few seconds), so we cannot construct the URL directly from the
+ * scene ID.  Instead we search the STAC API by MGRS tile + acquisition day and
+ * pick the item whose satellite prefix matches.
  */
-const buildCogUrl = (sceneId: string): string | null => {
+const fetchCogUrlFromStac = async (
+    sceneId: string,
+    signal: AbortSignal
+): Promise<string | null> => {
     const parts = sceneId.split('_');
-    // Expected: [S2A, MSIL2A, 20190610T002101, N0212, R116, T55JDF, 20201006T001729]
+    // Expected: [S2A, MSIL2A, 20250630T002211, N0511, R116, T55JDF, ...]
     if (parts.length < 7) return null;
 
-    const satellite = parts[0]; // e.g. S2A
-    const tileCode = parts[5]; // e.g. T55JDF
-    const datetime = parts[2]; // e.g. 20190610T002101
+    const satellite = parts[0]; // S2A / S2B / S2C
+    const tileCode = parts[5]; // T55JDF
+    const datetime = parts[2]; // 20250630T002211
 
-    // Tile code: T55JDF → zone=55, latBand=J, gridSq=DF
-    const tileStr = tileCode.startsWith('T') ? tileCode.slice(1) : tileCode;
+    const tileStr = tileCode.startsWith('T') ? tileCode.slice(1) : tileCode; // 55JDF
     if (tileStr.length < 5) return null;
-    const zone = tileStr.substring(0, 2); // 55
-    const latBand = tileStr.charAt(2); // J
-    const gridSq = tileStr.substring(3); // DF
 
-    // Year and month (no leading zero) from acquisition datetime
-    if (datetime.length < 6) return null;
-    const year = datetime.substring(0, 4); // 2019
-    const month = parseInt(datetime.substring(4, 6), 10).toString(); // "6"
+    const mgrsCode = `MGRS-${tileStr}`; // MGRS-55JDF
 
-    const folder = `${satellite}_T${tileStr}_${datetime}_L2A`;
+    // Build a 24-hour window around the acquisition day
+    const yyyymmdd = datetime.substring(0, 8); // 20250630
+    const iso = `${yyyymmdd.substring(0, 4)}-${yyyymmdd.substring(4, 6)}-${yyyymmdd.substring(6, 8)}`;
 
-    return `https://e84-earth-search-sentinel-data.s3.us-west-2.amazonaws.com/sentinel-2-c1-l2a/${zone}/${latBand}/${gridSq}/${year}/${month}/${folder}/TCI.tif`;
+    const res = await window.fetch(
+        'https://earth-search.aws.element84.com/v1/search',
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collections: ['sentinel-2-c1-l2a'],
+                query: { 'grid:code': { eq: mgrsCode } },
+                datetime: `${iso}T00:00:00Z/${iso}T23:59:59Z`,
+                limit: 20,
+            }),
+            signal,
+        }
+    );
+
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const features: any[] = json.features ?? [];
+
+    // Find the item whose ID starts with the same satellite prefix (S2A / S2B / S2C)
+    const match = features.find(
+        (f) => typeof f.id === 'string' && f.id.startsWith(satellite)
+    );
+
+    return (match?.assets?.visual?.href as string) ?? null;
 };
 
 export const SceneInfoContainer = () => {
@@ -76,6 +101,31 @@ export const SceneInfoContainer = () => {
 
     const data =
         useDataFromSelectedImageryScene<Sentinel2Scene>(fetchSceneByObjectId);
+
+    // The resolved COG URL fetched from the Earth Search STAC API.
+    // Falls back to null (which makes copyValue fall back to the scene ID) if
+    // the lookup fails or is still in progress.
+    const [cogUrl, setCogUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        setCogUrl(null);
+        const sceneId = data?.name;
+        if (!sceneId) return;
+
+        const controller = new AbortController();
+
+        fetchCogUrlFromStac(sceneId, controller.signal)
+            .then((url) => {
+                if (!controller.signal.aborted) {
+                    setCogUrl(url);
+                }
+            })
+            .catch(() => {
+                // Network error or abort — copyValue falls back to scene ID
+            });
+
+        return () => controller.abort();
+    }, [data?.name]);
 
     const tableData: SceneInfoTableData[] = useMemo(() => {
         if (!data) {
@@ -100,8 +150,9 @@ export const SceneInfoContainer = () => {
                 name: t('scene_id'), //'Scene ID',
                 value: name, //name.slice(0, 17),
                 clickToCopy: true,
-                // Copy the full AWS COG TCI.tif URL rather than just the scene ID
-                copyValue: buildCogUrl(name) ?? name,
+                // Copy the Earth Search TCI.tif COG URL once resolved,
+                // otherwise fall back to the scene ID itself.
+                copyValue: cogUrl ?? name,
             },
             {
                 // name: 'Satellite',
@@ -150,7 +201,7 @@ export const SceneInfoContainer = () => {
                 value: `${sunElevation}°/${sunAzimuth}°`,
             },
         ];
-    }, [data]);
+    }, [data, cogUrl]);
 
     if (mode === 'dynamic' || mode === 'analysis') {
         return null;
