@@ -331,10 +331,7 @@ export const IdentifyControl: FC<Props> = ({
                             Band Values
                         </span>
                         <button
-                            onClick={() => {
-                                setResult(null);
-                                setPendingPos(null);
-                            }}
+                            onClick={() => setIsActive(false)}
                             style={{ color: 'var(--custom-light-blue-50)', lineHeight: 1 }}
                             title="Close"
                         >

@@ -584,16 +584,15 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
         return [Math.min(...times), Math.max(...times)];
     }, [ndviData]);
 
-    /** Year span of the currently loaded dataset, e.g. "2015–2024". */
+    /** Number of calendar years spanned by the current dataset, e.g. "10 years". */
     const yearRange = useMemo<string | null>(() => {
         if (ndviData.length === 0) return null;
         const years = ndviData
             .map((d) => (d.date ? +d.date.substring(0, 4) : NaN))
             .filter((y) => !isNaN(y));
         if (years.length === 0) return null;
-        const minYear = Math.min(...years);
-        const maxYear = Math.max(...years);
-        return minYear === maxYear ? `${minYear}` : `${minYear}–${maxYear}`;
+        const numYears = Math.max(...years) - Math.min(...years) + 1;
+        return numYears === 1 ? '1 year' : `${numYears} years`;
     }, [ndviData]);
 
     // ── X-axis helpers ────────────────────────────────────────────────────────
