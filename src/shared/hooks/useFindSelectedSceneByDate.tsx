@@ -67,6 +67,19 @@ export const useFindSelectedSceneByDate = (): void => {
             return;
         }
 
+        // Guard: if the loaded scenes are still from a different year than the
+        // requested acquisitionDate (or the query hasn't returned any scenes yet),
+        // hold position — don't dispatch null — so the current layer stays visible
+        // until the right year's scene list arrives.  The effect will re-run
+        // automatically when availableScenes updates.
+        if (availableScenes.length > 0 && acquisitionDate) {
+            const reqYear = acquisitionDate.substring(0, 4);
+            const loadedYear = (availableScenes[0].formattedAcquisitionDate ?? '').substring(0, 4);
+            if (reqYear && loadedYear && reqYear !== loadedYear) {
+                return;
+            }
+        }
+
         // we should try to find a scene that was acquired from the selected acquisition date
         // whenever the available scenes and acquisition date changes
         const selectedScene = availableScenes.find(

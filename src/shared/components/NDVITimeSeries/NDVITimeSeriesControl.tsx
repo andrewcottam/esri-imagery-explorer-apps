@@ -116,7 +116,7 @@ const ndviToChartData = (data: NDVIDataPoint[]): LineChartDataItem[] =>
         .map((d) => ({
             x: new Date(d.date).getTime(),
             y: d.ndvi,
-            tooltip: `${d.date}: ${d.ndvi.toFixed(3)}`,
+            tooltip: `${new Date(d.date).toLocaleDateString(undefined, { timeZone: 'UTC' })}: ${d.ndvi.toFixed(3)}`,
         }))
         .sort((a, b) => a.x - b.x);
 
