@@ -653,6 +653,49 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
     }, [showMonthLabels, spanMonths, panelWidth, chartData]);
 
     /**
+     * Explicit tick timestamps for the x-axis, so D3 never auto-generates sub-year
+     * ticks that would deduplicate to the same year label.
+     *
+     * Year mode  – one tick per year; Jan 1 of each year, except for the first year
+     *              when the data starts mid-year (in that case anchor to the data start
+     *              so the label still appears at the left edge of the chart).
+     * Month mode – first day of each month within the range, thinned to the pixel
+     *              budget so labels never overlap.
+     */
+    const xTickValues = useMemo(() => {
+        if (chartData.length < 2) return undefined;
+        const minTime = chartData[0].x;
+        const maxTime = chartData[chartData.length - 1].x;
+
+        if (showMonthLabels) {
+            // Generate month-start timestamps within range
+            const ticks: number[] = [];
+            const start = new Date(minTime);
+            const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+            while (d.getTime() <= maxTime) {
+                ticks.push(d.getTime());
+                d.setUTCMonth(d.getUTCMonth() + 1);
+            }
+            // Thin evenly to the pixel budget
+            if (ticks.length <= xTickCount) return ticks;
+            const step = Math.ceil(ticks.length / xTickCount);
+            return ticks.filter((_, i) => i % step === 0);
+        }
+
+        // Year mode: one tick per calendar year
+        const minYear = new Date(minTime).getUTCFullYear();
+        const maxYear = new Date(maxTime).getUTCFullYear();
+        const ticks: number[] = [];
+        for (let yr = minYear; yr <= maxYear; yr++) {
+            const jan1 = Date.UTC(yr, 0, 1);
+            // If Jan 1 is before the data start (first year starts mid-year),
+            // use the data start so the label still sits within the visible range.
+            ticks.push(jan1 >= minTime ? jan1 : minTime);
+        }
+        return ticks;
+    }, [chartData, showMonthLabels, xTickCount]);
+
+    /**
      * Vertical reference lines.
      * - Zoomed out (year labels): one line per year boundary (Jan 1).
      * - Zoomed in (month labels): one line per month boundary.
@@ -1012,25 +1055,15 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             yScaleOptions={{ domain: yDomain }}
                                             xScaleOptions={{ useTimeScale: true, ...(fixedXDomain ? { domain: fixedXDomain } : {}) }}
                                             bottomAxisOptions={{
-                                                numberOfTicks: xTickCount,
-                                                // D3 treats numberOfTicks as a hint and may generate sub-year
-                                                // ticks (quarterly etc.) that all format to the same year
-                                                // string, producing duplicate labels.  The IIFE creates a
-                                                // fresh Set each render; the first occurrence of each label
-                                                // is rendered, subsequent duplicates return '' so only the
-                                                // tick mark remains.
-                                                tickFormatFunction: (() => {
-                                                    const seen = new Set<string>();
-                                                    return (val: any) => {
-                                                        const label = formatInUTCTimeZone(
-                                                            val,
-                                                            showMonthLabels ? 'MMM yyyy' : 'yyyy'
-                                                        );
-                                                        if (seen.has(label)) return '';
-                                                        seen.add(label);
-                                                        return label;
-                                                    };
-                                                })(),
+                                                // Pass explicit tick timestamps so D3 never
+                                                // auto-generates sub-year ticks that would all
+                                                // format to the same year string.
+                                                tickValues: xTickValues,
+                                                tickFormatFunction: (val: any) =>
+                                                    formatInUTCTimeZone(
+                                                        val,
+                                                        showMonthLabels ? 'MMM yyyy' : 'yyyy'
+                                                    ),
                                             }}
                                             verticalReferenceLines={verticalReferenceLines}
                                         />
