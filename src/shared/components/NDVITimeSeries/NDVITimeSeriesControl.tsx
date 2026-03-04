@@ -653,47 +653,65 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
     }, [showMonthLabels, spanMonths, panelWidth, chartData]);
 
     /**
-     * Explicit tick timestamps for the x-axis, so D3 never auto-generates sub-year
-     * ticks that would deduplicate to the same year label.
+     * Persistent state for the x-axis tick label formatter.
+     * Tracks the last-seen tick timestamp and year within a single D3 axis
+     * render pass so we can emit a year label only when the year changes.
      *
-     * Year mode  – one tick per year; Jan 1 of each year, except for the first year
-     *              when the data starts mid-year (in that case anchor to the data start
-     *              so the label still appears at the left edge of the chart).
-     * Month mode – first day of each month within the range, thinned to the pixel
-     *              budget so labels never overlap.
+     * NOTE: LineChartBasic does NOT forward `tickValues` to its BottomAxis
+     * component, so we cannot use explicit tick arrays to control D3.
+     * Instead we use numberOfTicks (which IS forwarded) and a smart formatter.
      */
-    const xTickValues = useMemo(() => {
-        if (chartData.length < 2) return undefined;
-        const minTime = chartData[0].x;
-        const maxTime = chartData[chartData.length - 1].x;
+    const xAxisLabelStateRef = useRef<{ lastTime: number; lastYear: number }>({
+        lastTime: -1,
+        lastYear: -1,
+    });
 
-        if (showMonthLabels) {
-            // Generate month-start timestamps within range
-            const ticks: number[] = [];
-            const start = new Date(minTime);
-            const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
-            while (d.getTime() <= maxTime) {
-                ticks.push(d.getTime());
-                d.setUTCMonth(d.getUTCMonth() + 1);
+    /**
+     * Tick label formatter for the x-axis.
+     *
+     * Month mode – returns 'MMM yyyy' for every tick (ticks are monthly, so
+     *              no two ticks share a label).
+     *
+     * Year mode  – returns the 4-digit year only for the FIRST tick that
+     *              introduces each new calendar year; all other ticks return ''
+     *              (keeping the tick mark but suppressing the text).
+     *
+     *              Stale-state detection: D3 calls this formatter left-to-right
+     *              for every tick in a single render pass.  If the incoming
+     *              timestamp is ≤ the last-seen timestamp, a new render pass
+     *              has started (D3 is calling from tick 0 again), so we reset
+     *              the tracking state before processing the tick.  This works
+     *              for all axis update scenarios — data reload, date-range
+     *              changes, or D3 internal transitions — because the first tick
+     *              of any new pass will always be earlier (or equal) to the
+     *              last tick of the previous pass.
+     */
+    const xTickFormatFunction = useMemo(() => {
+        // Changing label mode → reset state so the new formatter starts clean.
+        xAxisLabelStateRef.current = { lastTime: -1, lastYear: -1 };
+
+        return (val: any) => {
+            const time = +val;
+
+            if (showMonthLabels) {
+                return formatInUTCTimeZone(time, 'MMM yyyy');
             }
-            // Thin evenly to the pixel budget
-            if (ticks.length <= xTickCount) return ticks;
-            const step = Math.ceil(ticks.length / xTickCount);
-            return ticks.filter((_, i) => i % step === 0);
-        }
 
-        // Year mode: one tick per calendar year
-        const minYear = new Date(minTime).getUTCFullYear();
-        const maxYear = new Date(maxTime).getUTCFullYear();
-        const ticks: number[] = [];
-        for (let yr = minYear; yr <= maxYear; yr++) {
-            const jan1 = Date.UTC(yr, 0, 1);
-            // If Jan 1 is before the data start (first year starts mid-year),
-            // use the data start so the label still sits within the visible range.
-            ticks.push(jan1 >= minTime ? jan1 : minTime);
-        }
-        return ticks;
-    }, [chartData, showMonthLabels, xTickCount]);
+            // Year mode ─────────────────────────────────────────────────────
+            // Detect a new D3 render pass (formatter called from tick 0 again).
+            if (time <= xAxisLabelStateRef.current.lastTime) {
+                xAxisLabelStateRef.current = { lastTime: -1, lastYear: -1 };
+            }
+            xAxisLabelStateRef.current.lastTime = time;
+
+            const year = new Date(time).getUTCFullYear();
+            if (year !== xAxisLabelStateRef.current.lastYear) {
+                xAxisLabelStateRef.current.lastYear = year;
+                return formatInUTCTimeZone(time, 'yyyy');
+            }
+            return '';
+        };
+    }, [showMonthLabels]);
 
     /**
      * Vertical reference lines.
@@ -1055,15 +1073,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             yScaleOptions={{ domain: yDomain }}
                                             xScaleOptions={{ useTimeScale: true, ...(fixedXDomain ? { domain: fixedXDomain } : {}) }}
                                             bottomAxisOptions={{
-                                                // Pass explicit tick timestamps so D3 never
-                                                // auto-generates sub-year ticks that would all
-                                                // format to the same year string.
-                                                tickValues: xTickValues,
-                                                tickFormatFunction: (val: any) =>
-                                                    formatInUTCTimeZone(
-                                                        val,
-                                                        showMonthLabels ? 'MMM yyyy' : 'yyyy'
-                                                    ),
+                                                numberOfTicks: xTickCount,
+                                                tickFormatFunction: xTickFormatFunction,
                                             }}
                                             verticalReferenceLines={verticalReferenceLines}
                                         />
