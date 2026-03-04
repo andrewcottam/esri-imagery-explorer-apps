@@ -22,7 +22,6 @@ import { MapActionButton } from '@shared/components/MapActionButton/MapActionBut
 import { CalciteIcon } from '@esri/calcite-components-react';
 import { identify } from '@shared/services/helpers/identify';
 import { getPixelValuesFromIdentifyTaskResponse } from '@shared/services/helpers/getPixelValuesFromIdentifyTaskResponse';
-import { getLockRasterMosaicRule } from '@shared/services/helpers/getMosaicRules';
 import { SENTINEL_2_SERVICE_URL } from '@shared/services/sentinel-2/config';
 import { calcSentinel2SpectralIndex } from '@shared/services/sentinel-2/helpers';
 import { useAppSelector } from '@shared/store/configureStore';
@@ -49,61 +48,12 @@ const BAND_NAMES = [
     'SWIR 2 (B12)',     // index 11
 ] as const;
 
-/**
- * Query cloud probability (band 18, 0-indexed) for a clicked point by making a
- * second identify call with an ExtractBand rendering rule.  Runs in parallel
- * with the main band-value identify so it adds no extra latency.
- * Returns 0–100 (integer %) or null on error / no-data.
- */
-const fetchCloudProbability = async (
-    lat: number,
-    lon: number,
-    objectIds: number[] | null,
-    signal: AbortSignal
-): Promise<number | null> => {
-    const mosaicRule = objectIds?.length
-        ? getLockRasterMosaicRule(objectIds)
-        : null;
-
-    const params = new URLSearchParams({
-        f: 'json',
-        returnGeometry: 'false',
-        returnCatalogItems: 'false',
-        geometryType: 'esriGeometryPoint',
-        geometry: JSON.stringify({
-            spatialReference: { wkid: 4326 },
-            x: lon,
-            y: lat,
-        }),
-        renderingRule: JSON.stringify({
-            rasterFunction: 'ExtractBand',
-            rasterFunctionArguments: { BandIds: [18] },
-        }),
-    });
-
-    if (mosaicRule) {
-        params.append('mosaicRule', JSON.stringify(mosaicRule));
-    }
-
-    const res = await fetch(
-        `${SENTINEL_2_SERVICE_URL}/identify?${params}`,
-        { signal }
-    );
-    const data = await res.json();
-
-    if (data.error || !data.value || data.value === 'NoData') return null;
-    const val = parseFloat(data.value.split(',')[0]);
-    return isNaN(val) ? null : val;
-};
-
 /** Estimated panel dimensions for off-screen clamping. */
 const PANEL_W = 240;
 const PANEL_H = 340;
 
 type IdentifyResult = {
     bandValues: number[];
-    /** Cloud probability 0–100 (%) from band 18, or null if unavailable. */
-    cloudProb: number | null;
     lat: number;
     lon: number;
     panelX: number;
@@ -212,27 +162,16 @@ export const IdentifyControl: FC<Props> = ({
                     spatialReference: { wkid: 4326 },
                 });
 
-                const objectIds =
-                    currentMode !== 'dynamic' && params?.objectIdOfSelectedScene
-                        ? [params.objectIdOfSelectedScene]
-                        : null;
-
-                // Run band-value identify and cloud-probability identify in parallel.
-                const [res, cloudProb] = await Promise.all([
-                    identify({
-                        serviceURL: SENTINEL_2_SERVICE_URL,
-                        point,
-                        objectIds,
-                        abortController: abortControllerRef.current,
-                        maxItemCount: 1,
-                    }),
-                    fetchCloudProbability(
-                        lat,
-                        lon,
-                        objectIds,
-                        abortControllerRef.current.signal
-                    ),
-                ]);
+                const res = await identify({
+                    serviceURL: SENTINEL_2_SERVICE_URL,
+                    point,
+                    objectIds:
+                        currentMode !== 'dynamic' && params?.objectIdOfSelectedScene
+                            ? [params.objectIdOfSelectedScene]
+                            : null,
+                    abortController: abortControllerRef.current,
+                    maxItemCount: 1,
+                });
 
                 const bandValues = getPixelValuesFromIdentifyTaskResponse(res);
 
@@ -240,7 +179,7 @@ export const IdentifyControl: FC<Props> = ({
                     throw new Error('No data at this location');
                 }
 
-                setResult({ bandValues, cloudProb, lat, lon, panelX, panelY });
+                setResult({ bandValues, lat, lon, panelX, panelY });
             } catch (err: any) {
                 if (err.name !== 'AbortError') {
                     setError(err.message || 'Failed to identify pixel values');
@@ -487,33 +426,6 @@ export const IdentifyControl: FC<Props> = ({
                                             {ndvi}
                                         </span>
                                     </div>
-
-                                    {/* Cloud Probability */}
-                                    {result.cloudProb !== null && (
-                                        <div
-                                            style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                marginBottom: 3,
-                                            }}
-                                        >
-                                            <span
-                                                className="text-xs"
-                                                style={{ color: 'var(--custom-light-blue-50)' }}
-                                            >
-                                                Cloud Prob.
-                                            </span>
-                                            <span
-                                                className="text-xs"
-                                                style={{
-                                                    color: 'var(--custom-light-blue)',
-                                                    fontVariantNumeric: 'tabular-nums',
-                                                }}
-                                            >
-                                                {result.cloudProb.toFixed(0)}%
-                                            </span>
-                                        </div>
-                                    )}
 
                                     {/* Coordinates */}
                                     <div
