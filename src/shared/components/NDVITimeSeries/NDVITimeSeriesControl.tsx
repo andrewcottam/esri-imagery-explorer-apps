@@ -1013,11 +1013,24 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             xScaleOptions={{ useTimeScale: true, ...(fixedXDomain ? { domain: fixedXDomain } : {}) }}
                                             bottomAxisOptions={{
                                                 numberOfTicks: xTickCount,
-                                                tickFormatFunction: (val: any) =>
-                                                    formatInUTCTimeZone(
-                                                        val,
-                                                        showMonthLabels ? 'MMM yyyy' : 'yyyy'
-                                                    ),
+                                                // D3 treats numberOfTicks as a hint and may generate sub-year
+                                                // ticks (quarterly etc.) that all format to the same year
+                                                // string, producing duplicate labels.  The IIFE creates a
+                                                // fresh Set each render; the first occurrence of each label
+                                                // is rendered, subsequent duplicates return '' so only the
+                                                // tick mark remains.
+                                                tickFormatFunction: (() => {
+                                                    const seen = new Set<string>();
+                                                    return (val: any) => {
+                                                        const label = formatInUTCTimeZone(
+                                                            val,
+                                                            showMonthLabels ? 'MMM yyyy' : 'yyyy'
+                                                        );
+                                                        if (seen.has(label)) return '';
+                                                        seen.add(label);
+                                                        return label;
+                                                    };
+                                                })(),
                                             }}
                                             verticalReferenceLines={verticalReferenceLines}
                                         />
