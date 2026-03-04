@@ -1221,6 +1221,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                                         step="0.05"
                                                         defaultValue={effectiveYMax.toFixed(2)}
                                                         autoFocus
+                                                        onFocus={(e) => e.target.select()}
                                                         style={{
                                                             width: 40,
                                                             background: 'var(--custom-background)',
@@ -1285,6 +1286,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                                         step="0.05"
                                                         defaultValue={effectiveYMin.toFixed(2)}
                                                         autoFocus
+                                                        onFocus={(e) => e.target.select()}
                                                         style={{
                                                             width: 40,
                                                             background: 'var(--custom-background)',
