@@ -1,13 +1,19 @@
 /**
  * Continuous Change Detection and Classification (CCDC)
  *
- * TypeScript port of the pyccd reference implementation:
+ * TypeScript port aligned with the Google Earth Engine CCDC implementation:
+ *   https://developers.google.com/earth-engine/apidocs/ee-algorithms-temporalsegmentation-ccdc
+ *
+ * Derived from the pyccd reference implementation:
  *   https://github.com/repository-preservation/lcmap-pyccd
  *
- * Differences from pyccd:
- *  - Uses OLS (ordinary least squares) instead of LASSO for model fitting.
- *    The thresholds were calibrated with LASSO; results will be similar but
- *    may differ slightly on noisy data.
+ * Key GEE-alignment changes vs. the original pyccd defaults:
+ *  - LASSO (L1-regularised coordinate descent) replaces OLS for model fitting,
+ *    matching GEE's lambda=20 / maxIterations=10 000 defaults.
+ *    For NDVI (0–1 scale) use SINGLE_BAND_PARAMS which scales lambda to 0.002.
+ *  - MEOW_SIZE reduced from 12 to 6 (GEE minObservations=6).
+ *  - DAY_DELTA increased from 365 to 486 (GEE minNumOfYearsScaler=1.33).
+ *  - tmask / rlmFit remain OLS-based (not penalised in GEE either).
  *  - No QA-band processing — the caller is responsible for pre-filtering
  *    observations (removing clouds, shadows, fill pixels, etc.).
  *  - Works with any number of spectral bands, including a single-band
@@ -45,6 +51,15 @@ export interface CCDCParams {
     DETECTION_BANDS: number[];
     /** Band indices used for tmask outlier detection (pyccd default: [1,4]) */
     TMASK_BANDS: number[];
+    /**
+     * LASSO L1 regularisation penalty λ (0 = plain OLS).
+     * GEE uses λ=20 for reflectance bands (0–10 000 scale).
+     * For NDVI (0–1 scale) use λ≈0.002 (= 20 / 10 000).
+     * Set to 0 to fall back to OLS.
+     */
+    LASSO_LAMBDA: number;
+    /** Maximum coordinate-descent iterations for LASSO solver (GEE default: 10 000). */
+    LASSO_MAX_ITER: number;
 }
 
 export interface FittedModel {
@@ -91,9 +106,10 @@ export interface CCDCResult {
 // =============================================================================
 
 export const DEFAULT_PARAMS: CCDCParams = {
-    MEOW_SIZE: 12,
+    // GEE-aligned: minObservations=6, minNumOfYearsScaler=1.33 → DAY_DELTA=486
+    MEOW_SIZE: 6,
     PEEK_SIZE: 6,
-    DAY_DELTA: 365,
+    DAY_DELTA: 486,   // 1.33 × 365.2425 ≈ 486
     AVG_DAYS_YR: 365.2425,
     COEFFICIENT_MIN: 4,
     COEFFICIENT_MID: 6,
@@ -104,13 +120,20 @@ export const DEFAULT_PARAMS: CCDCParams = {
     T_CONST: 4.89,
     DETECTION_BANDS: [1, 2, 3, 4, 5],
     TMASK_BANDS: [1, 4],
+    LASSO_LAMBDA: 20,       // GEE default; calibrated for reflectance scale (0–10 000)
+    LASSO_MAX_ITER: 10000,  // GEE default
 };
 
-/** Params preset for single-band (e.g. NDVI) time series */
+/**
+ * Params preset for single-band (e.g. NDVI) time series.
+ * LASSO_LAMBDA is scaled from the GEE reflectance value (λ=20, scale 0–10 000)
+ * to NDVI scale (0–1): λ = 20 / 10 000 = 0.002.
+ */
 export const SINGLE_BAND_PARAMS: CCDCParams = {
     ...DEFAULT_PARAMS,
     DETECTION_BANDS: [0],
     TMASK_BANDS: [0],
+    LASSO_LAMBDA: 0.002,  // 20 / 10 000 — scaled for NDVI range
 };
 
 // CURVE_QA codes
@@ -214,6 +237,62 @@ function solveOLS(X: number[][], y: number[]): number[] {
     // Xᵀy  (p)
     const Xty = matVecMul(Xt, y);
     return gaussianElim(XtX, Xty);
+}
+
+/**
+ * LASSO: L1-regularised regression via coordinate descent.
+ *
+ * Objective: (1/2n) ‖y − Xβ‖² + λ · Σ_{j>0} |β_j|
+ *
+ * The intercept (column j=0) is NOT penalised, matching GEE behaviour.
+ *
+ * Soft-threshold update for j > 0:
+ *   ρ   = Σ_i X[i,j] · (r[i] + X[i,j] · β_j_old)   (partial residual correlation)
+ *   β_j = sign(ρ) · max(|ρ| − n·λ, 0) / ‖X[:,j]‖²
+ *
+ * X is (n × p), y is length-n.  Returns coefficients of length p.
+ */
+function solveLASSO(X: number[][], y: number[], lambda: number, maxIter: number): number[] {
+    const n = X.length;
+    const p = X[0].length;
+
+    // Pre-compute column squared norms ‖X[:,j]‖²
+    const xNormSq = new Array<number>(p).fill(0);
+    for (let j = 0; j < p; j++)
+        for (let i = 0; i < n; i++) xNormSq[j] += X[i][j] * X[i][j];
+
+    const beta = new Array<number>(p).fill(0);
+    // Running residuals r = y − Xβ  (β=0 initially, so r=y)
+    const r = [...y];
+    const tol = 1e-8;
+
+    for (let iter = 0; iter < maxIter; iter++) {
+        let maxDelta = 0;
+        for (let j = 0; j < p; j++) {
+            if (xNormSq[j] < 1e-14) continue;
+            const betaOld = beta[j];
+
+            // Partial residual correlation ρ = X[:,j]·(r + X[:,j]·β_j)
+            let rho = 0;
+            for (let i = 0; i < n; i++) rho += X[i][j] * (r[i] + X[i][j] * betaOld);
+
+            if (j === 0) {
+                // Intercept: no L1 penalty
+                beta[j] = rho / xNormSq[j];
+            } else {
+                // Soft-threshold
+                beta[j] = Math.sign(rho) * Math.max(Math.abs(rho) - n * lambda, 0) / xNormSq[j];
+            }
+
+            const delta = beta[j] - betaOld;
+            if (delta !== 0) {
+                for (let i = 0; i < n; i++) r[i] -= X[i][j] * delta;
+                if (Math.abs(delta) > maxDelta) maxDelta = Math.abs(delta);
+            }
+        }
+        if (maxDelta < tol) break;
+    }
+    return beta;
 }
 
 // =============================================================================
@@ -401,18 +480,25 @@ function buildDesignMatrix(dates: number[], numCoef: number, avgDaysYr: number):
     });
 }
 
-/** Fit an OLS harmonic model and return a FittedModel. */
+/**
+ * Fit a harmonic model and return a FittedModel.
+ * Uses LASSO coordinate descent when lassoLambda > 0, otherwise plain OLS.
+ */
 function fitModel(
     dates: number[],
     y: number[],
     numCoef: number,
     avgDaysYr: number,
+    lassoLambda = 0,
+    lassoMaxIter = 10000,
 ): FittedModel {
     if (dates.length === 0) {
         return { intercept: 0, coef: new Array(numCoef - 1).fill(0), numCoef, rmse: 0, residuals: [] };
     }
     const X = buildDesignMatrix(dates, numCoef, avgDaysYr);
-    const beta = solveOLS(X, y);
+    const beta = lassoLambda > 0
+        ? solveLASSO(X, y, lassoLambda, lassoMaxIter)
+        : solveOLS(X, y);
     const predicted = X.map((row) => row.reduce((s, xi, j) => s + xi * beta[j], 0));
     const { rmse, residuals } = calcRmse(y, predicted, numCoef);
     return {
@@ -688,7 +774,8 @@ function initialize(
     params: CCDCParams,
 ): InitResult {
     const { MEOW_SIZE, DAY_DELTA, CHANGE_THRESHOLD, T_CONST, AVG_DAYS_YR,
-            TMASK_BANDS, DETECTION_BANDS, COEFFICIENT_MIN } = params;
+            TMASK_BANDS, DETECTION_BANDS, COEFFICIENT_MIN,
+            LASSO_LAMBDA, LASSO_MAX_ITER } = params;
 
     let ws = wStart, we = wStop;
     let currentMask = mask;
@@ -728,7 +815,7 @@ function initialize(
         const updSpectral = applyMask2d(obs, currentMask);
         const fitDates = updPeriod.slice(ws, we);
         models = obs.map((_, bi) =>
-            fitModel(fitDates, updSpectral[bi].slice(ws, we), COEFFICIENT_MIN, AVG_DAYS_YR),
+            fitModel(fitDates, updSpectral[bi].slice(ws, we), COEFFICIENT_MIN, AVG_DAYS_YR, LASSO_LAMBDA, LASSO_MAX_ITER),
         );
 
         if (!stable(models, fitDates, variogram, CHANGE_THRESHOLD, DETECTION_BANDS)) {
@@ -836,7 +923,7 @@ function lookforward(
 ): LookforwardResult {
     const { PEEK_SIZE, COEFFICIENT_MIN, COEFFICIENT_MID, COEFFICIENT_MAX,
             NUM_OBS_FACTOR, DETECTION_BANDS, CHANGE_THRESHOLD, OUTLIER_THRESHOLD,
-            AVG_DAYS_YR } = params;
+            AVG_DAYS_YR, LASSO_LAMBDA, LASSO_MAX_ITER } = params;
 
     let ws = wStart, we = wStop;
     let currentMask = mask;
@@ -873,6 +960,8 @@ function lookforward(
                     spectral[bi].slice(fitStart, fitStop),
                     numCoefs,
                     AVG_DAYS_YR,
+                    LASSO_LAMBDA,
+                    LASSO_MAX_ITER,
                 ),
             );
         }
@@ -929,7 +1018,7 @@ function lookforward(
     const magnitudes = reportResiduals.map((r) => median(r));
 
     const fallbackModel = (bi: number) =>
-        fitModel(period.slice(ws, we), spectral[bi].slice(ws, we), numCoefs, AVG_DAYS_YR);
+        fitModel(period.slice(ws, we), spectral[bi].slice(ws, we), numCoefs, AVG_DAYS_YR, LASSO_LAMBDA, LASSO_MAX_ITER);
 
     const segment = buildSegment(
         models ?? obs.map((_, bi) => fallbackModel(bi)),
@@ -958,13 +1047,13 @@ function catchSegment(
     curveQA: number,
     params: CCDCParams,
 ): ChangeSegment {
-    const { AVG_DAYS_YR, COEFFICIENT_MIN } = params;
+    const { AVG_DAYS_YR, COEFFICIENT_MIN, LASSO_LAMBDA, LASSO_MAX_ITER } = params;
     const period = applyMask(dates, mask);
     const spectral = applyMask2d(obs, mask);
 
     const segDates = period.slice(winStart, winEnd);
     const models = obs.map((_, bi) =>
-        fitModel(segDates, spectral[bi].slice(winStart, winEnd), COEFFICIENT_MIN, AVG_DAYS_YR),
+        fitModel(segDates, spectral[bi].slice(winStart, winEnd), COEFFICIENT_MIN, AVG_DAYS_YR, LASSO_LAMBDA, LASSO_MAX_ITER),
     );
 
     const breakDay =
