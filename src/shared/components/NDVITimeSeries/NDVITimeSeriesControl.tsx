@@ -184,25 +184,6 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
     const [isLoading, setIsLoading] = useState(false);
     const [location, setLocation] = useState<ClickedLocation | null>(null);
     const [ndviData, setNdviData] = useState<NDVIDataPoint[]>([]);
-    // Compute linear regression client-side from raw observations using OLS
-    const linearRegression = useMemo<LinearRegression | null>(() => {
-        const rawData = ndviToChartData(ndviData);
-        if (rawData.length < 2) return null;
-        const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
-        const firstX = rawData[0].x;
-        const n = rawData.length;
-        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-        for (const pt of rawData) {
-            const t = (pt.x - firstX) / MS_PER_YEAR;
-            sumX += t; sumY += pt.y; sumXY += t * pt.y; sumX2 += t * t;
-        }
-        const denom = n * sumX2 - sumX * sumX;
-        if (Math.abs(denom) < 1e-12) return null;
-        const slope = (n * sumXY - sumX * sumY) / denom;
-        const intercept = (sumY - slope * sumX) / n;
-        const spanYears = (rawData[rawData.length - 1].x - firstX) / MS_PER_YEAR;
-        return { y1: intercept, y2: intercept + slope * spanYears, slope, intercept };
-    }, [ndviData]);
     const [activeModel, setActiveModel] = useState<ModelType>('none');
     const [startDate, setStartDate] = useState(getDefaultStartDate);
     const [endDate, setEndDate] = useState(getDefaultEndDate);
@@ -432,57 +413,70 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
         return { mean, min, max, range: max - min, std };
     }, [chartData]);
 
-    // ── Model fits ────────────────────────────────────────────────────────────
+    // ── Model fits — all fit to the currently displayed chartData ─────────────
 
-    /** Harmonic regression curve — always computed from raw observations so it
-     *  is unaffected by the current aggregation mode. */
+    /** Linear regression fit to the currently displayed data. */
+    const linearRegression = useMemo<LinearRegression | null>(() => {
+        if (chartData.length < 2) return null;
+        const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+        const firstX = chartData[0].x;
+        const n = chartData.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (const pt of chartData) {
+            const t = (pt.x - firstX) / MS_PER_YEAR;
+            sumX += t; sumY += pt.y; sumXY += t * pt.y; sumX2 += t * t;
+        }
+        const denom = n * sumX2 - sumX * sumX;
+        if (Math.abs(denom) < 1e-12) return null;
+        const slope = (n * sumXY - sumX * sumY) / denom;
+        const intercept = (sumY - slope * sumX) / n;
+        const spanYears = (chartData[chartData.length - 1].x - firstX) / MS_PER_YEAR;
+        return { y1: intercept, y2: intercept + slope * spanYears, slope, intercept };
+    }, [chartData]);
+
+    /** Harmonic regression fit to the currently displayed data. */
     const harmonicFit = useMemo<HarmonicRegressionResult | null>(() => {
-        const rawData = ndviToChartData(ndviData);
-        if (activeModel !== 'harmonic' || rawData.length < 8) return null;
-        return fitHarmonicRegression(rawData, 2);
-    }, [activeModel, ndviData]);
+        if (activeModel !== 'harmonic' || chartData.length < 8) return null;
+        return fitHarmonicRegression(chartData, 2);
+    }, [activeModel, chartData]);
 
-    /** CCDC change-detection result — runs full algorithm on raw observations. */
+    /** CCDC change-detection result — fit to the currently displayed data. */
     const ccdcResult = useMemo<CCDCResult | null>(() => {
-        const rawData = ndviToChartData(ndviData);
-        if (activeModel !== 'ccdc' || rawData.length < 12) return null;
-        const dates = rawData.map((pt) => dateToOrdinal(new Date(pt.x)));
-        const values = rawData.map((pt) => pt.y);
+        if (activeModel !== 'ccdc' || chartData.length < 12) return null;
+        const dates = chartData.map((pt) => dateToOrdinal(new Date(pt.x)));
+        const values = chartData.map((pt) => pt.y);
         return detectSingleBand(dates, values, {
             LASSO_LAMBDA: ccdcLambda,
             CHANGE_THRESHOLD: chi2ProbToThreshold(ccdcChi2Prob),
             DAY_DELTA: Math.round(ccdcMinYears * 365.2425),
             MEOW_SIZE: ccdcMinObs,
         });
-    }, [activeModel, ndviData, ccdcLambda, ccdcChi2Prob, ccdcMinYears, ccdcMinObs]);
+    }, [activeModel, chartData, ccdcLambda, ccdcChi2Prob, ccdcMinYears, ccdcMinObs]);
 
-    /** RMSE of the linear regression fit — always computed against raw observations
-     *  so the value is unaffected by the current aggregation mode. */
+    /** RMSE of the linear regression fit against the currently displayed data. */
     const linearRMSE = useMemo<number | null>(() => {
-        if (!linearRegression) return null;
-        const rawData = ndviToChartData(ndviData);
-        if (rawData.length < 2) return null;
-        const firstX = rawData[0].x;
-        const lastX = rawData[rawData.length - 1].x;
+        if (!linearRegression || chartData.length < 2) return null;
+        const firstX = chartData[0].x;
+        const lastX = chartData[chartData.length - 1].x;
         const spanX = lastX - firstX;
         if (spanX === 0) return null;
         let sse = 0;
         if (linearRegression.slope !== undefined && linearRegression.intercept !== undefined) {
             const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
-            for (const pt of rawData) {
+            for (const pt of chartData) {
                 const tYears = (pt.x - firstX) / MS_PER_YEAR;
                 const yFit = linearRegression.intercept + linearRegression.slope * tYears;
                 sse += (pt.y - yFit) ** 2;
             }
         } else {
-            for (const pt of rawData) {
+            for (const pt of chartData) {
                 const t = (pt.x - firstX) / spanX;
                 const yFit = linearRegression.y1 + t * (linearRegression.y2 - linearRegression.y1);
                 sse += (pt.y - yFit) ** 2;
             }
         }
-        return Math.sqrt(sse / rawData.length);
-    }, [linearRegression, ndviData]);
+        return Math.sqrt(sse / chartData.length);
+    }, [linearRegression, chartData]);
 
     // ── Drag-to-select date range ─────────────────────────────────────────────
 
@@ -1573,7 +1567,7 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                         )}
 
                                         {/* CCDC not enough data */}
-                                        {activeModel === 'ccdc' && !ccdcResult && ndviData.length > 0 && ndviData.length < 12 && (
+                                        {activeModel === 'ccdc' && !ccdcResult && chartData.length > 0 && chartData.length < 12 && (
                                             <span
                                                 className="ml-auto"
                                                 style={{ fontSize: 11, color: '#A855F7', opacity: 0.6, whiteSpace: 'nowrap' }}
