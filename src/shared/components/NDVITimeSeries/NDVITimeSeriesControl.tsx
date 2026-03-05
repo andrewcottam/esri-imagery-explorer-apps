@@ -440,18 +440,23 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
         return fitHarmonicRegression(chartData, 2);
     }, [activeModel, chartData]);
 
-    /** CCDC change-detection result — fit to the currently displayed data. */
+    /**
+     * CCDC change-detection result — always fit to raw observations, regardless
+     * of the current aggregation mode, so that monthly summaries don't suppress
+     * break detection (CCDC expects individual acquisitions, not averages).
+     */
     const ccdcResult = useMemo<CCDCResult | null>(() => {
-        if (activeModel !== 'ccdc' || chartData.length < 12) return null;
-        const dates = chartData.map((pt) => dateToOrdinal(new Date(pt.x)));
-        const values = chartData.map((pt) => pt.y);
+        const rawData = ndviToChartData(ndviData);
+        if (activeModel !== 'ccdc' || rawData.length < 12) return null;
+        const dates = rawData.map((pt) => dateToOrdinal(new Date(pt.x)));
+        const values = rawData.map((pt) => pt.y);
         return detectSingleBand(dates, values, {
             LASSO_LAMBDA: ccdcLambda,
             CHANGE_THRESHOLD: chi2ProbToThreshold(ccdcChi2Prob),
             DAY_DELTA: Math.round(ccdcMinYears * 365.2425),
             MEOW_SIZE: ccdcMinObs,
         });
-    }, [activeModel, chartData, ccdcLambda, ccdcChi2Prob, ccdcMinYears, ccdcMinObs]);
+    }, [activeModel, ndviData, ccdcLambda, ccdcChi2Prob, ccdcMinYears, ccdcMinObs]);
 
     /** RMSE of the linear regression fit against the currently displayed data. */
     const linearRMSE = useMemo<number | null>(() => {
@@ -1566,8 +1571,8 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             </span>
                                         )}
 
-                                        {/* CCDC not enough data */}
-                                        {activeModel === 'ccdc' && !ccdcResult && chartData.length > 0 && chartData.length < 12 && (
+                                        {/* CCDC not enough data — check raw obs count, not aggregated */}
+                                        {activeModel === 'ccdc' && !ccdcResult && ndviData.length > 0 && ndviToChartData(ndviData).length < 12 && (
                                             <span
                                                 className="ml-auto"
                                                 style={{ fontSize: 11, color: '#A855F7', opacity: 0.6, whiteSpace: 'nowrap' }}
