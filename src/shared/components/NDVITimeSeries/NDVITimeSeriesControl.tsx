@@ -40,6 +40,7 @@ import {
     dateToOrdinal,
     evaluateSegment,
     CCDCResult,
+    chi2ProbToThreshold,
 } from '@shared/utils/ccdc/ccdc';
 import { formatInUTCTimeZone } from '@shared/utils/date-time/formatInUTCTimeZone';
 import {
@@ -214,6 +215,17 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
     const [showData, setShowData] = useState(true);
     /** Which satellite sensor the currently displayed data came from. */
     const [dataSource, setDataSource] = useState<'sentinel2' | 'landsat'>('sentinel2');
+
+    // ── CCDC advanced settings ─────────────────────────────────────────────
+    const [ccdcSettingsOpen, setCcdcSettingsOpen] = useState(false);
+    /** LASSO regularisation strength (0 = OLS). Default 0.002 for NDVI scale. */
+    const [ccdcLambda, setCcdcLambda] = useState(0.002);
+    /** Chi-squared cumulative probability for the change threshold (0.95 → χ²≈11.07). */
+    const [ccdcChi2Prob, setCcdcChi2Prob] = useState(0.95);
+    /** Minimum span (years) required to initialise a model segment. */
+    const [ccdcMinYears, setCcdcMinYears] = useState(1);
+    /** Minimum number of clear observations required to start a segment. */
+    const [ccdcMinObs, setCcdcMinObs] = useState(10);
 
     // Custom y-axis domain overrides — null means "use auto-computed value"
     const [customYMin, setCustomYMin] = useState<number | null>(null);
@@ -436,8 +448,13 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
         if (activeModel !== 'ccdc' || rawData.length < 12) return null;
         const dates = rawData.map((pt) => dateToOrdinal(new Date(pt.x)));
         const values = rawData.map((pt) => pt.y);
-        return detectSingleBand(dates, values);
-    }, [activeModel, ndviData]);
+        return detectSingleBand(dates, values, {
+            LASSO_LAMBDA: ccdcLambda,
+            CHANGE_THRESHOLD: chi2ProbToThreshold(ccdcChi2Prob),
+            DAY_DELTA: Math.round(ccdcMinYears * 365.2425),
+            MEOW_SIZE: ccdcMinObs,
+        });
+    }, [activeModel, ndviData, ccdcLambda, ccdcChi2Prob, ccdcMinYears, ccdcMinObs]);
 
     /** RMSE of the linear regression fit — always computed against raw observations
      *  so the value is unaffected by the current aggregation mode. */
@@ -1494,6 +1511,23 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             CCDC
                                         </button>
 
+                                        {/* CCDC settings gear */}
+                                        <button
+                                            onClick={() => setCcdcSettingsOpen((o) => !o)}
+                                            title={ccdcSettingsOpen ? 'Hide CCDC settings' : 'CCDC advanced settings'}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                padding: '2px 4px',
+                                                cursor: 'pointer',
+                                                color: ccdcSettingsOpen ? '#A855F7' : 'rgba(255,255,255,0.45)',
+                                                fontSize: 13,
+                                                lineHeight: 1,
+                                            }}
+                                        >
+                                            ⚙
+                                        </button>
+
                                         {/* Linear stats */}
                                         {activeModel === 'linear' && linearRegression?.slope !== undefined && (
                                             <span
@@ -1548,6 +1582,52 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             </span>
                                         )}
                                     </div>
+
+                                    {/* CCDC advanced settings panel */}
+                                    {ccdcSettingsOpen && (
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '1fr 1fr',
+                                            gap: '6px 16px',
+                                            padding: '8px 10px',
+                                            background: 'rgba(168, 85, 247, 0.08)',
+                                            border: '1px solid rgba(168, 85, 247, 0.25)',
+                                            borderRadius: 6,
+                                            marginTop: 4,
+                                        }}>
+                                            {([
+                                                { label: 'λ regularisation', value: ccdcLambda,   setter: setCcdcLambda,   min: 0,    max: 0.1,  step: 0.0001, decimals: 4,  title: 'LASSO penalty — 0 = OLS, 0.002 = GEE NDVI default' },
+                                                { label: 'Min observations',  value: ccdcMinObs,  setter: setCcdcMinObs,   min: 4,    max: 50,   step: 1,      decimals: 0,  title: 'Minimum clear observations to start a segment (MEOW_SIZE)' },
+                                                { label: 'χ² probability',    value: ccdcChi2Prob, setter: setCcdcChi2Prob, min: 0.50, max: 0.999,step: 0.005,  decimals: 3,  title: 'Chi-squared change threshold probability — lower = more sensitive (0.95 → χ²≈11.1)' },
+                                                { label: 'Min span (years)',   value: ccdcMinYears, setter: setCcdcMinYears, min: 0.25, max: 5,    step: 0.25,   decimals: 2,  title: 'Minimum temporal span in years required to initialise a model (DAY_DELTA)' },
+                                            ] as const).map(({ label, value, setter, min, max, step, decimals, title }) => (
+                                                <label key={label} title={title} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.7)', cursor: 'default' }}>
+                                                    <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{label}</span>
+                                                    <input
+                                                        type="number"
+                                                        value={value}
+                                                        min={min}
+                                                        max={max}
+                                                        step={step}
+                                                        onChange={(e) => {
+                                                            const v = parseFloat(e.target.value);
+                                                            if (!isNaN(v)) (setter as (n: number) => void)(v);
+                                                        }}
+                                                        style={{
+                                                            width: 72,
+                                                            background: 'rgba(0,0,0,0.35)',
+                                                            border: '1px solid rgba(168, 85, 247, 0.4)',
+                                                            borderRadius: 4,
+                                                            color: '#e0d4f7',
+                                                            fontSize: 11,
+                                                            padding: '2px 5px',
+                                                            textAlign: 'right',
+                                                        }}
+                                                    />
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
                                     </>
                                 )}
                             </>

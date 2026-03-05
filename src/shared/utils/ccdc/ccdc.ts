@@ -1201,6 +1201,18 @@ export function detectSingleBand(
 }
 
 /**
+ * Convert a chi-squared cumulative probability to the corresponding change-detection
+ * threshold used by CCDC (chi² PPF with 5 degrees of freedom).
+ *
+ * @param probability  Cumulative probability in (0, 1).  GEE default = 0.99.
+ *                     A lower value (e.g. 0.95) makes change detection more sensitive.
+ * @returns            Threshold value stored in CCDCParams.CHANGE_THRESHOLD.
+ */
+export function chi2ProbToThreshold(probability: number): number {
+    return chi2ppf(Math.max(1e-6, Math.min(1 - 1e-6, probability)), 5);
+}
+
+/**
  * Convert a JavaScript Date to an ordinal day number compatible with Python's
  * `datetime.date.toordinal()`.  Day 1 = 1 Jan 0001 (proleptic Gregorian).
  * 1 Jan 1970 = ordinal 719163.
