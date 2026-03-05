@@ -1590,23 +1590,26 @@ export const NDVITimeSeriesControl: FC<Props> = ({ mapView, onIsActiveChange, on
                                             marginTop: 4,
                                         }}>
                                             {([
-                                                { label: 'λ regularisation', value: ccdcLambda,   setter: setCcdcLambda,   min: 0,    max: 0.1,  step: 0.0001, decimals: 4,  title: 'LASSO penalty — 0 = OLS, 0.002 = GEE NDVI default' },
-                                                { label: 'Min observations',  value: ccdcMinObs,  setter: setCcdcMinObs,   min: 4,    max: 50,   step: 1,      decimals: 0,  title: 'Minimum clear observations to start a segment (MEOW_SIZE)' },
-                                                { label: 'χ² probability',    value: ccdcChi2Prob, setter: setCcdcChi2Prob, min: 0.50, max: 0.999,step: 0.005,  decimals: 3,  title: 'Chi-squared change threshold probability — lower = more sensitive (0.95 → χ²≈11.1)' },
-                                                { label: 'Min span (years)',   value: ccdcMinYears, setter: setCcdcMinYears, min: 0.25, max: 5,    step: 0.25,   decimals: 2,  title: 'Minimum temporal span in years required to initialise a model (DAY_DELTA)' },
-                                            ] as const).map(({ label, value, setter, min, max, step, decimals, title }) => (
+                                                { label: 'λ regularisation', value: ccdcLambda,    setter: setCcdcLambda,   min: 0,    max: 0.1,  step: 0.0001, title: 'LASSO penalty — 0 = OLS, 0.002 = GEE NDVI default' },
+                                                { label: 'Min observations',  value: ccdcMinObs,   setter: setCcdcMinObs,   min: 4,    max: 50,   step: 1,      title: 'Minimum clear observations to start a segment (MEOW_SIZE)' },
+                                                { label: 'χ² probability',    value: ccdcChi2Prob, setter: setCcdcChi2Prob, min: 0.50, max: 0.999, step: 0.005, title: 'Chi-squared change threshold probability — lower = more sensitive (0.95 → χ²≈11.1)' },
+                                                { label: 'Min span (years)',   value: ccdcMinYears, setter: setCcdcMinYears, min: 0.25, max: 5,    step: 0.25,   title: 'Minimum temporal span in years required to initialise a model (DAY_DELTA)' },
+                                            ] as const).map(({ label, value, setter, min, max, step, title }) => (
                                                 <label key={label} title={title} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.7)', cursor: 'default' }}>
                                                     <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{label}</span>
                                                     <input
+                                                        key={value}
                                                         type="number"
-                                                        value={value}
+                                                        defaultValue={value}
                                                         min={min}
                                                         max={max}
                                                         step={step}
+                                                        onFocus={(e) => e.target.select()}
                                                         onChange={(e) => {
                                                             const v = parseFloat(e.target.value);
                                                             if (!isNaN(v)) (setter as (n: number) => void)(v);
                                                         }}
+                                                        onKeyDown={(e) => e.stopPropagation()}
                                                         style={{
                                                             width: 72,
                                                             background: 'rgba(0,0,0,0.35)',
