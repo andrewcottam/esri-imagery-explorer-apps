@@ -572,8 +572,15 @@ function chi2ppf(p: number, df: number): number {
 
 /**
  * Scale peek size for the sensor's revisit interval.
- * pyccd calibrated for 16-day Landsat repeat; Sentinel-2 revisit ≈ 5 days
- * would give a larger peek size (more observations per window).
+ * pyccd was calibrated for 16-day Landsat repeat; this scales up for denser
+ * sensors (e.g. Sentinel-2 at ~5 days gives peek ≈ 19).
+ *
+ * NOTE: GEE CCDC does NOT apply this scaling — it uses a fixed PEEK_SIZE = 6
+ * regardless of sensor.  Calling this function on Sentinel-2 data inflates the
+ * peek window to ~19, requiring 19 consecutive anomalies to declare change
+ * instead of 6, which dramatically reduces sensitivity and is the main reason
+ * the JS implementation misses breaks that GEE finds.  The function is retained
+ * for reference but is NOT called in standardProcedure.
  */
 function adjustPeek(dates: number[], defPeek: number): number {
     if (dates.length < 2) return defPeek;
@@ -585,7 +592,11 @@ function adjustPeek(dates: number[], defPeek: number): number {
     return Math.max(adj, defPeek);
 }
 
-/** Adjust change threshold when peek window is larger than the default. */
+/**
+ * Adjust change threshold when peek window is larger than the default.
+ * Coupled to adjustPeek — retained for reference but not called in
+ * standardProcedure (GEE uses fixed peek and fixed threshold).
+ */
 function adjustChgThresh(peek: number, defPeek: number, defThresh: number): number {
     if (peek <= defPeek) return defThresh;
     const ptCg = 1 - Math.pow(1 - 0.99, defPeek / peek);
@@ -1082,9 +1093,9 @@ function standardProcedure(dates: number[], obs: number[][], params: CCDCParams)
     const results: ChangeSegment[] = [];
 
     const variogram = adjustedVariogram(dates, obs);
-    const peekSize = adjustPeek(dates, PEEK_SIZE);
-    const changeThresh = adjustChgThresh(peekSize, PEEK_SIZE, params.CHANGE_THRESHOLD);
-    const p: CCDCParams = { ...params, PEEK_SIZE: peekSize, CHANGE_THRESHOLD: changeThresh };
+    // GEE CCDC uses fixed PEEK_SIZE and CHANGE_THRESHOLD regardless of sensor
+    // revisit interval — do NOT call adjustPeek / adjustChgThresh here.
+    const p: CCDCParams = { ...params };
 
     let ws = 0, we = MEOW_SIZE;
     let previousEnd = 0;
