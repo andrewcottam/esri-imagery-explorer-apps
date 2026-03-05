@@ -642,8 +642,8 @@ function calcResiduals(
 
 /**
  * Change magnitude per time step across detection bands.
- * residuals: (nDetBands × peekSize)
- * Returns: (peekSize,) — squared normalised sum across bands.
+ * residuals: (nDetBands × PEEK_SIZE)
+ * Returns: (PEEK_SIZE,) — squared normalised sum across bands.
  */
 function changeMagnitude(
     residuals: number[][],
@@ -1123,14 +1123,14 @@ function standardProcedure(dates: number[], obs: number[][], params: CCDCParams)
         }
 
         // Step 3: Catch — gap between previous break and current start
-        if (ws - previousEnd > peekSize && start) {
+        if (ws - previousEnd > PEEK_SIZE && start) {
             results.push(catchSegment(dates, obs, mask, previousEnd, ws, CQA_START, p));
             start = false;
         }
 
         // Check if enough data remains for lookforward
         const period3 = applyMask(dates, mask);
-        if (we + peekSize > period3.length) break;
+        if (we + PEEK_SIZE > period3.length) break;
 
         // Step 4: Lookforward
         const lf = lookforward(dates, obs, ws, we, mask, variogram, p);
@@ -1147,7 +1147,7 @@ function standardProcedure(dates: number[], obs: number[][], params: CCDCParams)
 
     // Step 6: Catch — end of series
     const finalPeriod = applyMask(dates, mask);
-    if (previousEnd + peekSize < finalPeriod.length) {
+    if (previousEnd + PEEK_SIZE < finalPeriod.length) {
         results.push(catchSegment(dates, obs, mask, previousEnd, finalPeriod.length, CQA_END, p));
     }
 
