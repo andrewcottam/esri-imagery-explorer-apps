@@ -1180,6 +1180,9 @@ export function detect(
 /**
  * Convenience wrapper for single-band time series (e.g. NDVI).
  *
+ * Defaults to SINGLE_BAND_PARAMS (LASSO_LAMBDA=0.002, scaled for 0–1 range).
+ * Any field in `params` overrides the SINGLE_BAND_PARAMS default.
+ *
  * @param dates  Ordinal day numbers (sorted ascending, length N).
  * @param values Band values (length N).
  * @param params Optional parameter overrides.
@@ -1189,9 +1192,10 @@ export function detectSingleBand(
     values: number[],
     params: Partial<CCDCParams> = {},
 ): CCDCResult {
+    // Spread SINGLE_BAND_PARAMS so LASSO_LAMBDA (0.002) and band indices are
+    // set correctly for 0–1 range data; caller can override any field via params.
     return detect(dates, [values], {
-        DETECTION_BANDS: [0],
-        TMASK_BANDS: [0],
+        ...SINGLE_BAND_PARAMS,
         ...params,
     });
 }
